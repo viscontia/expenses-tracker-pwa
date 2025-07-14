@@ -15,9 +15,38 @@ export const Route = createFileRoute("/_authenticated/dashboard/")({
 function Dashboard() {
   const { user } = useAuthStore();
   
-  // State per i combobox della dashboard
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
-  const [categoriesLimit, setCategoriesLimit] = useState<number>(10);
+  // Ottieni i dati utente aggiornati tramite tRPC (questo si aggiorna quando vengono salvate le preferenze)
+  const { data: currentUser } = trpc.auth.getCurrentUser.useQuery();
+  
+  // Usa currentUser se disponibile, altrimenti fallback su user da auth store
+  const userData = currentUser || user;
+  
+  // Inizializza gli stati con i valori predefiniti dell'utente o valori di default
+  const getInitialCurrency = () => {
+    if (userData?.preferences) {
+      const prefs = userData.preferences as any;
+      return prefs.defaultCurrency || 'EUR';
+    }
+    return 'EUR';
+  };
+
+  const getInitialCategoryLimit = () => {
+    if (userData?.preferences) {
+      const prefs = userData.preferences as any;
+      return prefs.chartCategoryCount || 10;
+    }
+    return 10;
+  };
+
+  // State per i combobox della dashboard - inizializzati con preferenze utente
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(getInitialCurrency());
+  const [categoriesLimit, setCategoriesLimit] = useState<number>(getInitialCategoryLimit());
+
+  // Aggiorna la valuta selezionata quando cambiano le preferenze utente
+  useEffect(() => {
+    const newCurrency = getInitialCurrency();
+    setSelectedCurrency(newCurrency);
+  }, [userData?.preferences]);
 
   // Carica le valute disponibili
   const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
@@ -25,16 +54,12 @@ function Dashboard() {
   // Carica la data dell'ultimo aggiornamento valutario
   const { data: lastExchangeUpdate } = trpc.currency.getLastExchangeRateUpdate.useQuery();
 
-  // Inizializza i valori dai settings utente
+  // Aggiorna gli stati quando cambiano le preferenze utente (solo al mount/reload)
   useEffect(() => {
     if (user?.preferences) {
       const prefs = user.preferences as any;
-      if (prefs.defaultCurrency) {
-        setSelectedCurrency(prefs.defaultCurrency);
-      }
-      if (prefs.chartCategoryCount) {
-        setCategoriesLimit(prefs.chartCategoryCount);
-      }
+      setSelectedCurrency(prefs.defaultCurrency || 'EUR');
+      setCategoriesLimit(prefs.chartCategoryCount || 10);
     }
   }, [user?.preferences]);
 

@@ -63,6 +63,9 @@ function Settings() {
   // Get current user data
   const { data: currentUser, refetch } = trpc.auth.getCurrentUser.useQuery();
   
+  // Carica le valute disponibili dalla tabella exchange_rates
+  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
+  
   // Update preferences mutation
   const updatePreferencesMutation = trpc.auth.updatePreferences.useMutation({
     onSuccess: () => {
@@ -279,10 +282,11 @@ function Settings() {
                   onChange={(e) => setPreferences(prev => ({ ...prev, defaultCurrency: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >
-                  <option value="EUR">€ Euro</option>
-                  <option value="USD">R US Dollar</option>
-                  <option value="GBP">£ British Pound</option>
-                  <option value="ZAR">R South African Rand</option>
+                  {availableCurrencies?.map((currency) => (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.symbol} {currency.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               
