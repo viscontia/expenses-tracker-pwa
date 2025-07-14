@@ -37,6 +37,7 @@ function Categories() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
   const [iconSearch, setIconSearch] = useState("");
   const [availableIcons, setAvailableIcons] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -69,6 +70,10 @@ function Categories() {
   const deleteMutation = trpc.categories.delete.useMutation({
     onSuccess: () => {
       utils.categories.getAll.invalidate();
+      setDeletingCategoryId(null);
+    },
+    onError: () => {
+      setDeletingCategoryId(null);
     },
   });
 
@@ -103,6 +108,7 @@ function Categories() {
 
   const handleDelete = (id: number) => {
     if (confirm("Sei sicuro di voler eliminare questa categoria?")) {
+      setDeletingCategoryId(id);
       deleteMutation.mutate({ id });
     }
   };
@@ -171,9 +177,14 @@ function Categories() {
                   </button>
                   <button
                     onClick={() => handleDelete(category.id)}
-                    className="text-red-600 hover:text-red-800 p-1"
+                    disabled={deletingCategoryId === category.id}
+                    className="text-red-600 hover:text-red-800 p-1 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <LucideIcons.Trash2 size={16} />
+                    {deletingCategoryId === category.id ? (
+                      <LucideIcons.Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <LucideIcons.Trash2 size={16} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -242,9 +253,17 @@ function Categories() {
                 <button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {editingCategory ? "Aggiorna" : "Crea"}
+                  {(createMutation.isPending || updateMutation.isPending) && (
+                    <LucideIcons.Loader2 size={16} className="animate-spin" />
+                  )}
+                  {(createMutation.isPending || updateMutation.isPending) 
+                    ? "Salvando..." 
+                    : editingCategory 
+                      ? "Aggiorna" 
+                      : "Crea"
+                  }
                 </button>
                 <button
                   type="button"
