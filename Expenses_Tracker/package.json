@@ -14,7 +14,9 @@
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test-exchange": "tsx src/server/scripts/test-exchange-update.ts",
+    "update-exchange": "tsx src/server/scripts/manual-update-exchange.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.3",

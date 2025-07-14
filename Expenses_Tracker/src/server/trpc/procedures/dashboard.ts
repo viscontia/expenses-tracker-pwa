@@ -4,14 +4,58 @@ import { db } from "~/server/db";
 import { TRPCError } from "@trpc/server";
 
 /**
- * Calculates the total expenses in EUR for a given user and period.
- * It converts amounts from other currencies using the conversionRate.
- * @param userId - The ID of the user.
- * @param startDate - The start date of the period.
- * @param endDate - The end date of the period.
- * @returns The total expenses in EUR.
+ * Converte un importo da una valuta all'altra usando i tassi di cambio più recenti
  */
-const getTotalExpensesForPeriod = async (userId: number, startDate: Date, endDate: Date): Promise<number> => {
+const convertCurrency = async (amount: number, fromCurrency: string, toCurrency: string): Promise<number> => {
+  if (fromCurrency === toCurrency) {
+    return amount;
+  }
+
+  // Cerca il tasso di cambio più recente
+  const exchangeRate = await db.exchangeRate.findFirst({
+    where: {
+      fromCurrency,
+      toCurrency,
+    },
+    orderBy: {
+      date: 'desc',
+    },
+  });
+
+  if (exchangeRate) {
+    return amount * exchangeRate.rate;
+  }
+
+  // Se non trova il tasso diretto, prova il tasso inverso
+  const inverseRate = await db.exchangeRate.findFirst({
+    where: {
+      fromCurrency: toCurrency,
+      toCurrency: fromCurrency,
+    },
+    orderBy: {
+      date: 'desc',
+    },
+  });
+
+  if (inverseRate && inverseRate.rate !== 0) {
+    return amount / inverseRate.rate;
+  }
+
+  // Fallback: se non trova nessun tasso, restituisce l'importo originale
+  console.warn(`No exchange rate found for ${fromCurrency} to ${toCurrency}`);
+  return amount;
+};
+
+/**
+ * Calculates the total expenses in a target currency for a given user and period.
+ * It converts amounts from other currencies using real-time exchange rates.
+ */
+const getTotalExpensesForPeriod = async (
+  userId: number, 
+  startDate: Date, 
+  endDate: Date, 
+  targetCurrency: string = 'EUR'
+): Promise<number> => {
     const expenses = await db.expense.findMany({
         where: {
             userId,
@@ -24,27 +68,33 @@ const getTotalExpensesForPeriod = async (userId: number, startDate: Date, endDat
 
     let total = 0;
     for (const expense of expenses) {
-        if (expense.currency === 'EUR') {
-            total += expense.amount;
-        } else if (expense.conversionRate > 0) {
-            // Assuming conversionRate stores how many units of the foreign currency one EUR is.
-            // E.g., if currency is ZAR and rate is 20, it means 1 EUR = 20 ZAR.
-            total += expense.amount / expense.conversionRate;
-        }
+        const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
+        total += convertedAmount;
     }
     return total;
 };
 
-const calculateTrend = (current: number, previous: number): number => {
-    if (previous === 0) {
-        return current > 0 ? 100 : 0;
-    }
-    return ((current - previous) / previous) * 100;
+// Nuova funzione per ottenere le statistiche transazioni
+const getTransactionCount = async (userId: number, startDate: Date, endDate: Date): Promise<number> => {
+    const count = await db.expense.count({
+        where: {
+            userId,
+            date: {
+                gte: startDate,
+                lte: endDate,
+            },
+        },
+    });
+    return count;
 };
 
 export const getKpis = protectedProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({
+        targetCurrency: z.string().default('EUR'),
+    }).optional())
+    .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
+        const targetCurrency = input?.targetCurrency ?? 'EUR';
         const now = new Date();
         
         // Current Month Dates
@@ -76,13 +126,15 @@ export const getKpis = protectedProcedure
             totalCurrentYear,
             totalPreviousYear,
             comparativeCurrentYear,
+            transactionCount,
         ] = await Promise.all([
-            getTotalExpensesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth),
-            getTotalExpensesForPeriod(userId, startOfPreviousMonth, endOfPreviousMonth),
-            getTotalExpensesForPeriod(userId, startOfPreviousMonth, comparativeDateInPreviousMonth),
-            getTotalExpensesForPeriod(userId, startOfCurrentYear, endOfCurrentYear),
-            getTotalExpensesForPeriod(userId, startOfPreviousYear, endOfPreviousYear),
-            getTotalExpensesForPeriod(userId, startOfPreviousYear, comparativeDateInPreviousYear),
+            getTotalExpensesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, targetCurrency),
+            getTotalExpensesForPeriod(userId, startOfPreviousMonth, endOfPreviousMonth, targetCurrency),
+            getTotalExpensesForPeriod(userId, startOfPreviousMonth, comparativeDateInPreviousMonth, targetCurrency),
+            getTotalExpensesForPeriod(userId, startOfCurrentYear, endOfCurrentYear, targetCurrency),
+            getTotalExpensesForPeriod(userId, startOfPreviousYear, endOfPreviousYear, targetCurrency),
+            getTotalExpensesForPeriod(userId, startOfPreviousYear, comparativeDateInPreviousYear, targetCurrency),
+            getTransactionCount(userId, startOfCurrentMonth, endOfCurrentMonth),
         ]);
 
         return {
@@ -92,27 +144,29 @@ export const getKpis = protectedProcedure
             totalCurrentYear,
             totalPreviousYear,
             comparativeCurrentYear,
+            transactionCount,
+            targetCurrency,
         };
     });
 
-const getTopCategoriesForPeriod = async (userId: number, startDate: Date, endDate: Date, limit: number) => {
+const getTopCategoriesForPeriod = async (
+  userId: number, 
+  startDate: Date, 
+  endDate: Date, 
+  limit: number,
+  targetCurrency: string = 'EUR'
+) => {
     const expenses = await db.expense.findMany({
         where: { userId, date: { gte: startDate, lte: endDate } },
-        select: { amount: true, currency: true, conversionRate: true, categoryId: true },
+        select: { amount: true, currency: true, categoryId: true },
     });
 
     const categoryTotals = new Map<number, number>();
 
     for (const expense of expenses) {
-        let amountInEur = 0;
-        if (expense.currency === 'EUR') {
-            amountInEur = expense.amount;
-        } else if (expense.conversionRate > 0) {
-            amountInEur = expense.amount / expense.conversionRate;
-        }
-
+        const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
         const currentTotal = categoryTotals.get(expense.categoryId) || 0;
-        categoryTotals.set(expense.categoryId, currentTotal + amountInEur);
+        categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     }
 
     const sortedCategories = Array.from(categoryTotals.entries())
@@ -131,12 +185,12 @@ const getTopCategoriesForPeriod = async (userId: number, startDate: Date, endDat
 
     return sortedCategories.map(id => ({
         id,
-        category: categoryMap.get(id) || 'Unknown',
+        name: categoryMap.get(id) || 'Unknown',
         amount: categoryTotals.get(id) || 0,
     }));
 };
 
-const getMonthlyTrend = async (userId: number, months: number) => {
+const getMonthlyTrend = async (userId: number, months: number, targetCurrency: string = 'EUR') => {
     const trendData: { month: string, amount: number }[] = [];
     const now = new Date();
 
@@ -144,7 +198,7 @@ const getMonthlyTrend = async (userId: number, months: number) => {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const startDate = new Date(date.getFullYear(), date.getMonth(), 1);
         const endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-        const total = await getTotalExpensesForPeriod(userId, startDate, endDate);
+        const total = await getTotalExpensesForPeriod(userId, startDate, endDate, targetCurrency);
         
         trendData.push({
             month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
@@ -154,7 +208,7 @@ const getMonthlyTrend = async (userId: number, months: number) => {
     return trendData.reverse();
 };
 
-const getYearlyTrend = async (userId: number, years: number) => {
+const getYearlyTrend = async (userId: number, years: number, targetCurrency: string = 'EUR') => {
     const trendData: { year: string, amount: number }[] = [];
     const now = new Date();
 
@@ -162,7 +216,7 @@ const getYearlyTrend = async (userId: number, years: number) => {
         const year = now.getFullYear() - i;
         const startDate = new Date(year, 0, 1);
         const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-        const total = await getTotalExpensesForPeriod(userId, startDate, endDate);
+        const total = await getTotalExpensesForPeriod(userId, startDate, endDate, targetCurrency);
 
         trendData.push({
             year: String(year),
@@ -175,13 +229,15 @@ const getYearlyTrend = async (userId: number, years: number) => {
 
 export const getChartData = protectedProcedure
     .input(z.object({
-        topCategoriesLimit: z.number().min(1).max(20).default(10),
+        topCategoriesLimit: z.number().min(1).max(50).default(10),
+        targetCurrency: z.string().default('EUR'),
     }).optional())
     .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
         const now = new Date();
         
         const limit = input?.topCategoriesLimit ?? 10;
+        const targetCurrency = input?.targetCurrency ?? 'EUR';
 
         // Date ranges
         const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -194,60 +250,29 @@ export const getChartData = protectedProcedure
         const endOfPreviousYear = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
         
         const [
-            topCategoriesCurrentMonth,
-            topCategoriesPreviousMonth,
-            topCategoriesCurrentYear,
-            topCategoriesPreviousYear,
-            monthOverMonthTrend,
-            yearOverYearTrend,
+            categoryExpenses,
+            monthlyTrend,
         ] = await Promise.all([
-            getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, limit),
-            getTopCategoriesForPeriod(userId, startOfPreviousMonth, endOfPreviousMonth, limit),
-            getTopCategoriesForPeriod(userId, startOfCurrentYear, endOfCurrentYear, limit),
-            getTopCategoriesForPeriod(userId, startOfPreviousYear, endOfPreviousYear, limit),
-            getMonthlyTrend(userId, 12),
-            getYearlyTrend(userId, 5),
+            getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, limit, targetCurrency),
+            getMonthlyTrend(userId, 12, targetCurrency),
         ]);
 
-        const combineCategoryData = (
-            current: { category: string, amount: number }[], 
-            previous: { category: string, amount: number }[]
-        ) => {
-            const combined = new Map<string, { current: number, previous: number }>();
-            current.forEach(c => combined.set(c.category, { current: c.amount, previous: 0 }));
-            previous.forEach(p => {
-                const existing = combined.get(p.category);
-                if (existing) {
-                    existing.previous = p.amount;
-                } else {
-                    combined.set(p.category, { current: 0, previous: p.amount });
-                }
-            });
-            return Array.from(combined.entries()).map(([category, amounts]) => ({ category, ...amounts }));
-        };
-
-        const comparisonMonth = combineCategoryData(topCategoriesCurrentMonth, topCategoriesPreviousMonth);
-        const comparisonYear = combineCategoryData(topCategoriesCurrentYear, topCategoriesPreviousYear);
-
         return {
-            topCategoriesCurrentMonth,
-            topCategoriesPreviousMonth,
-            topCategoriesCurrentYear,
-            topCategoriesPreviousYear,
-            comparisonMonth,
-            comparisonYear,
-            monthOverMonthTrend,
-            yearOverYearTrend,
+            categoryExpenses,
+            monthlyTrend,
+            targetCurrency,
         };
     });
 
 export const getRecentExpenses = protectedProcedure
     .input(z.object({
         limit: z.number().min(1).max(50).default(10),
+        targetCurrency: z.string().default('EUR'),
     }).optional())
     .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
         const limit = input?.limit ?? 10;
+        const targetCurrency = input?.targetCurrency ?? 'EUR';
 
         const expenses = await db.expense.findMany({
             where: { userId },
@@ -256,5 +281,19 @@ export const getRecentExpenses = protectedProcedure
             take: limit,
         });
 
-        return expenses;
+        // Converte gli importi nella valuta target
+        const convertedExpenses = await Promise.all(
+            expenses.map(async (expense) => {
+                const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
+                return {
+                    ...expense,
+                    convertedAmount,
+                    originalAmount: expense.amount,
+                    originalCurrency: expense.currency,
+                    targetCurrency,
+                };
+            })
+        );
+
+        return convertedExpenses;
     }); 

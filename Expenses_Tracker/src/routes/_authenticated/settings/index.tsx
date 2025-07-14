@@ -11,9 +11,40 @@ import {
   Trash2,
   Save,
   Loader2,
-  Check
+  Check,
+  TrendingUp,
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
+import toast from 'react-hot-toast';
+
+// Componente separato per il pulsante di aggiornamento manuale
+function ManualExchangeUpdateButton() {
+  const updateMutation = trpc.currency.updateDailyExchangeRates.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(`Cambi aggiornati: ${data.updatedRates} valute`);
+      } else {
+        toast.error(data.message || 'Errore durante l\'aggiornamento');
+      }
+    },
+    onError: (error) => {
+      toast.error(`Errore: ${error.message}`);
+    }
+  });
+
+  return (
+    <button
+      onClick={() => updateMutation.mutate()}
+      disabled={updateMutation.isPending}
+      className="w-full flex items-center justify-center px-4 py-2 border border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors disabled:opacity-50"
+    >
+      <RefreshCw className={`h-4 w-4 mr-2 ${updateMutation.isPending ? 'animate-spin' : ''}`} />
+      {updateMutation.isPending ? 'Aggiornando...' : 'Aggiorna Cambi Manualmente'}
+    </button>
+  );
+}
 
 export const Route = createFileRoute('/_authenticated/settings/')({
   component: Settings,
@@ -70,10 +101,10 @@ function Settings() {
 
   // Update local preferences when user data changes
   useEffect(() => {
-    if (currentUser?.preferences) {
+    if (currentUser?.preferences && typeof currentUser.preferences === 'object') {
       setPreferences(prev => ({
         ...prev,
-        ...currentUser.preferences,
+        ...(currentUser.preferences as object),
       }));
     }
   }, [currentUser]);
@@ -392,6 +423,38 @@ function Settings() {
                     Elimina Account
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Debug: Exchange Rates Update Status */}
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center mb-4">
+              <TrendingUp className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-3" />
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Aggiornamento Cambi Valutari
+              </h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                    Aggiornamento Automatico
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    I cambi vengono aggiornati automaticamente una volta al giorno all'apertura dell'app
+                  </p>
+                </div>
+                <div className="text-green-600 dark:text-green-400">
+                  <CheckCircle className="h-5 w-5" />
+                </div>
+              </div>
+
+                             <ManualExchangeUpdateButton />
+
+              <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                API utilizzata: exchangerate-api.com | Valute supportate: EUR, ZAR, USD, GBP, JPY, AUD, CAD, CHF, CNY, SEK, NZD, MXN, INR
               </div>
             </div>
           </div>

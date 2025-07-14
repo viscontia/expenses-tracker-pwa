@@ -67,10 +67,20 @@ pnpm db:push
 pnpm dev
 ```
 
+## Caratteristiche Principali
+
+### 💱 Aggiornamento Automatico Cambi Valutari
+- **Automatico**: Si attiva ad ogni apertura dell'app
+- **Intelligente**: Una sola volta al giorno (evita aggiornamenti multipli)
+- **Background**: Non interferisce con l'UX
+- **API Pubblica**: exchangerate-api.com (163+ valute)
+- **Debug**: Pannello nelle Impostazioni per controllo manuale
+
 ## Scripts Disponibili
 
 - `pnpm dev` - Avvia il server di sviluppo
 - `pnpm build` - Build per produzione
+- `pnpm test-exchange` - Test aggiornamento cambi valutari
 - `pnpm db:push` - Sincronizza lo schema del database
 - `pnpm db:studio` - Apre Prisma Studio
 - `pnpm lint` - Controllo del codice con ESLint
