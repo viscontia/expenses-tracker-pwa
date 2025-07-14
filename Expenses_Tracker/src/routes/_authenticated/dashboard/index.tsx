@@ -21,32 +21,28 @@ function Dashboard() {
   // Usa currentUser se disponibile, altrimenti fallback su user da auth store
   const userData = currentUser || user;
   
-  // Inizializza gli stati con i valori predefiniti dell'utente o valori di default
-  const getInitialCurrency = () => {
-    if (userData?.preferences) {
-      const prefs = userData.preferences as any;
-      return prefs.defaultCurrency || 'EUR';
-    }
-    return 'EUR';
-  };
+  // State per i combobox della dashboard - inizializzati con valori di default
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
+  const [categoriesLimit, setCategoriesLimit] = useState<number>(10);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
-  const getInitialCategoryLimit = () => {
-    if (userData?.preferences) {
-      const prefs = userData.preferences as any;
-      return prefs.chartCategoryCount || 10;
-    }
-    return 10;
-  };
-
-  // State per i combobox della dashboard - inizializzati con preferenze utente
-  const [selectedCurrency, setSelectedCurrency] = useState<string>(getInitialCurrency());
-  const [categoriesLimit, setCategoriesLimit] = useState<number>(getInitialCategoryLimit());
-
-  // Aggiorna la valuta selezionata quando cambiano le preferenze utente
+  // Inizializza e aggiorna gli stati quando i dati utente sono disponibili
   useEffect(() => {
-    const newCurrency = getInitialCurrency();
-    setSelectedCurrency(newCurrency);
-  }, [userData?.preferences]);
+    if (userData?.preferences) {
+      const prefs = userData.preferences as any;
+      const newCurrency = prefs.defaultCurrency || 'EUR';
+      const newCategoryLimit = prefs.chartCategoryCount || 10;
+      
+      // Aggiorna sempre la valuta (sia per inizializzazione che per cambiamenti)
+      setSelectedCurrency(newCurrency);
+      
+      // Aggiorna le categorie solo se non è ancora inizializzato
+      if (!isInitialized) {
+        setCategoriesLimit(newCategoryLimit);
+        setIsInitialized(true);
+      }
+    }
+  }, [userData?.preferences, isInitialized]);
 
   // Carica le valute disponibili
   const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
