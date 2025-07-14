@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -euo pipefail
+
+echo "Stopping Expenses Tracker PWA..."
+
+# Kill processes by name
+pkill -f "vinxi dev" || true
+pkill -f "tsr generate" || true
+pkill -f "pnpm dev" || true
+
+# Kill process on port 3000
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+
+echo "All processes stopped."

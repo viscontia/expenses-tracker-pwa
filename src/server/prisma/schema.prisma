@@ -1,0 +1,1 @@
+currency       String   @db.VarChar(3)   // 3-letter ISO code

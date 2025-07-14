@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Script per avviare l'app Expenses Tracker PWA
+# Posizione: /Users/adrianovisconti/Documents/Sviluppo Software/GitHub/Expenses Tracker PWA/
+
+echo "🚀 Avvio Expenses Tracker PWA..."
+echo "=================================="
+
+# Controllo e terminazione processi esistenti
+echo "🔍 Controllo processi sulla porta 3000..."
+PORT_PROCESS=$(lsof -ti:3000)
+if [ ! -z "$PORT_PROCESS" ]; then
+    echo "⚠️  Terminazione processo sulla porta 3000..."
+    kill -9 $PORT_PROCESS
+    echo "✅ Processo terminato"
+else
+    echo "✅ Nessun processo attivo sulla porta 3000"
+fi
+
+echo "🔍 Controllo processi vinxi..."
+VINXI_PIDS=$(ps aux | grep vinxi | grep -v grep | awk '{print $2}')
+if [ ! -z "$VINXI_PIDS" ]; then
+    echo "⚠️  Terminazione processi vinxi..."
+    echo $VINXI_PIDS | xargs kill -9
+    echo "✅ Processi vinxi terminati"
+else
+    echo "✅ Nessun processo vinxi attivo"
+fi
+
+# Creazione file .env se non esiste
+ENV_FILE="Expenses_Tracker/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "🔧 Creazione file .env..."
+    cat > "$ENV_FILE" << EOF
+NODE_ENV=development
+ADMIN_PASSWORD=admin123
+JWT_SECRET=your-super-secret-jwt-key-here-make-it-long-and-random
+DATABASE_URL="postgresql://postgres.bkwkqlbcoltlpttmyrdl:Moscy83Blendy92!!@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require"
+EOF
+    echo "✅ File .env creato"
+fi
+
+echo ""
+echo "🔧 Preparazione ambiente..."
+
+# Caricamento variabili d'ambiente dal file .env
+if [ -f "$ENV_FILE" ]; then
+    echo "📄 Caricamento variabili da .env..."
+    export $(cat "$ENV_FILE" | grep -v '^#' | xargs)
+    echo "✅ Variabili d'ambiente caricate"
+else
+    echo "⚠️  File .env non trovato, uso valori di default..."
+    export NODE_ENV=development
+    export ADMIN_PASSWORD=admin123
+    export JWT_SECRET=your-super-secret-jwt-key-here-make-it-long-and-random
+    export DATABASE_URL="postgresql://postgres.bkwkqlbcoltlpttmyrdl:Moscy83Blendy92!!@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require"
+    echo "✅ Variabili d'ambiente esportate"
+fi
+
+echo ""
+echo "🚀 Avvio del server di sviluppo..."
+echo "📱 L'app sarà disponibile su: http://localhost:3000"
+echo "⏹️  Premi Ctrl+C per fermare il server"
+echo ""
+
+# Cambio directory e avvio server
+cd Expenses_Tracker
+
+# Eseguo l'aggiornamento dei tassi in background
+echo "🔄 Avvio aggiornamento tassi di cambio in background..."
+pnpm run update-rates &
+
+# Avvio il server di sviluppo
+pnpm dev 

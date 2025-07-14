@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Cleanup function
+cleanup() {
+    echo "Cleaning up..."
+    pkill -f "vinxi dev" || true
+    pkill -f "tsr generate" || true
+    # Kill any process on port 3000
+    lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+}
+
+# Set trap to cleanup on exit
+trap cleanup EXIT INT TERM
+
+echo "Starting Expenses Tracker PWA..."
+
+# Ensure port 3000 is free before starting
+echo "Killing any process on port 3000..."
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+
+# Wait a moment for processes to terminate
+sleep 2
+
+# Verify port 3000 is free
+if lsof -i:3000 &>/dev/null; then
+    echo "Warning: Port 3000 is still in use. Attempting to force kill..."
+    sudo lsof -ti:3000 | xargs sudo kill -9 2>/dev/null || true
+    sleep 2
+fi
+
+echo "Starting server on port 3000..."
+pnpm dev

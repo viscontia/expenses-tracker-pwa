@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  preferences Json?  // Store user preferences like theme, default currency
+  createdAt DateTime @default(now())
+  
+  // Relations
+  categories Category[]
+  expenses   Expense[]
+  
+  @@map("users")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  name        String
+  description String?
+  icon        String   // Icon name/identifier
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+  
+  @@map("categories")
+}
+
+model Expense {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  categoryId     Int
+  amount         Float
+  currency       String   // 'ZAR' or 'EUR'
+  conversionRate Float    // Rate at time of expense registration
+  date           DateTime
+  description    String?
+  createdAt      DateTime @default(now())
+  
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@map("expenses")
+}
+
+model ExchangeRate {
+  id           Int      @id @default(autoincrement())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  date         DateTime @default(now())
+  
+  @@unique([fromCurrency, toCurrency, date])
+  @@map("exchange_rates")
+}
