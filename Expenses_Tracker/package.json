@@ -7,6 +7,8 @@
     "vinxi-dev": "vinxi dev --port 3000",
     "build": "vinxi build",
     "start": "vinxi start",
+    "test": "vitest",
+    "test:run": "vitest run",
     "update-rates": "tsx src/server/scripts/update-exchange-rates.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . -c eslint.config.mjs --max-warnings 0",
@@ -16,7 +18,12 @@
     "db:studio": "prisma studio",
     "format": "prettier --write .",
     "test-exchange": "tsx src/server/scripts/test-exchange-update.ts",
-    "update-exchange": "tsx src/server/scripts/manual-update-exchange.ts"
+    "update-exchange": "tsx src/server/scripts/manual-update-exchange.ts",
+    "migrate-historical": "tsx src/server/scripts/migrate-historical-rates.ts migrate",
+    "migrate-rollback": "tsx src/server/scripts/migrate-historical-rates.ts rollback",
+    "migrate-status": "tsx src/server/scripts/migrate-historical-rates.ts status",
+    "migrate-monitor": "tsx src/server/scripts/migration-monitor.ts",
+    "create-admin": "tsx src/server/scripts/create-admin.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.3",
@@ -31,6 +38,7 @@
     "@trpc/client": "^11.1.2",
     "@trpc/server": "^11.1.2",
     "@trpc/tanstack-react-query": "^11.1.2",
+    "@types/pg": "^8.15.4",
     "autoprefixer": "^10.4.20",
     "axios": "^1.10.0",
     "bcryptjs": "^3.0.2",
@@ -39,6 +47,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.510.0",
     "minio": "^8.0.5",
+    "pg": "^8.16.3",
     "postcss": "^8.5.1",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.3.0",
@@ -61,6 +70,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.4",
     "concurrently": "^9.2.0",
     "eslint": "^9.25.1",
     "eslint-plugin-react": "^7.37.4",
@@ -72,7 +82,8 @@
     "tsx": "^4.19.4",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.31.1",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4"
   },
   "private": true,
   "type": "module"

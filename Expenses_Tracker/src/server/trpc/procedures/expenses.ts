@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, baseProcedure } from "~/server/trpc/main";
-import { db } from "~/server/db";
+import { RawExpensesDB } from "~/server/db-raw";
+import { historicalRateService } from "~/server/services/historical-rate";
 
 const createExpenseSchema = z.object({
   categoryId: z.number(),
@@ -42,23 +43,26 @@ export const getExpenses = protectedProcedure
   .input(getExpensesSchema)
   .query(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const where: any = { userId };
-    if (input.categoryIds && input.categoryIds.length > 0) {
-      where.categoryId = { in: input.categoryIds };
-    }
-    if (input.startDate || input.endDate) {
-      where.date = {};
-      if (input.startDate) where.date.gte = new Date(input.startDate);
-      if (input.endDate) where.date.lte = new Date(input.endDate);
-    }
-    const expenses = await db.expense.findMany({
-      where,
-      include: { category: true },
-      orderBy: { date: 'desc' },
-      take: input.limit,
-      skip: input.offset,
-    });
-    const total = await db.expense.count({ where });
+    
+    const startDate = input.startDate ? new Date(input.startDate) : undefined;
+    const endDate = input.endDate ? new Date(input.endDate) : undefined;
+    
+    const expenses = await RawExpensesDB.getExpensesWithCategories(
+      userId,
+      input.categoryIds,
+      startDate,
+      endDate,
+      input.limit,
+      input.offset
+    );
+    
+    const total = await RawExpensesDB.countExpenses(
+      userId,
+      input.categoryIds,
+      startDate,
+      endDate
+    );
+    
     return {
       expenses,
       total,
@@ -70,50 +74,88 @@ export const createExpense = protectedProcedure
   .input(createExpenseSchema)
   .mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const category = await db.category.findFirst({
-      where: { id: input.categoryId, userId },
-    });
+    const category = await RawExpensesDB.findCategoryById(input.categoryId, userId);
     if (!category) throw new TRPCError({ code: "NOT_FOUND", message: "Category not found" });
-    const expense = await db.expense.create({
-      data: { ...input, userId, date: new Date(input.date) },
-      include: { category: true },
-    });
-    return expense;
+    
+    const expense = await RawExpensesDB.createExpense(
+      userId,
+      input.categoryId,
+      input.amount,
+      input.currency,
+      input.conversionRate,
+      input.date,
+      input.description
+    );
+
+    // Save historical rates after expense creation
+    // This operation should not fail the expense creation if it encounters errors
+    try {
+      await historicalRateService.saveRatesForExpense(expense.id, expense.date);
+      console.log(`Successfully saved historical rates for expense ${expense.id}`);
+    } catch (error) {
+      // Log the error but don't fail the expense creation
+      console.error(`Failed to save historical rates for expense ${expense.id}:`, error);
+      // In a production environment, you might want to queue this for retry
+      // or send an alert to monitoring systems
+    }
+
+    return {
+      ...expense,
+      category
+    };
   });
 
 export const updateExpense = protectedProcedure
   .input(updateExpenseSchema)
   .mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const existingExpense = await db.expense.findFirst({
-      where: { id: input.id, userId },
-    });
+    const existingExpense = await RawExpensesDB.findExpenseById(input.id, userId);
     if (!existingExpense) throw new TRPCError({ code: "NOT_FOUND", message: "Expense not found" });
+    
     if (input.categoryId) {
-      const category = await db.category.findFirst({
-        where: { id: input.categoryId, userId },
-      });
+      const category = await RawExpensesDB.findCategoryById(input.categoryId, userId);
       if (!category) throw new TRPCError({ code: "NOT_FOUND", message: "Category not found" });
     }
-    const expense = await db.expense.update({
-      where: { id: input.id },
-      data: { 
-        ...input, 
-        ...(input.date && { date: new Date(input.date) }) 
-      },
-      include: { category: true },
-    });
-    return expense;
+    
+    const expense = await RawExpensesDB.updateExpense(
+      input.id,
+      userId,
+      {
+        categoryId: input.categoryId,
+        amount: input.amount,
+        currency: input.currency,
+        conversionRate: input.conversionRate,
+        date: input.date,
+        description: input.description
+      }
+    );
+
+    // If the date was updated, save new historical rates for the new date
+    if (input.date && new Date(input.date).getTime() !== existingExpense.date.getTime()) {
+      try {
+        await historicalRateService.saveRatesForExpense(expense.id, expense.date);
+        console.log(`Successfully saved historical rates for updated expense ${expense.id}`);
+      } catch (error) {
+        // Log the error but don't fail the expense update
+        console.error(`Failed to save historical rates for updated expense ${expense.id}:`, error);
+      }
+    }
+
+    // Get category info for return
+    const category = await RawExpensesDB.findCategoryById(expense.categoryId, userId);
+    
+    return {
+      ...expense,
+      category
+    };
   });
 
 export const deleteExpense = protectedProcedure
   .input(deleteExpenseSchema)
   .mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const existingExpense = await db.expense.findFirst({
-      where: { id: input.id, userId },
-    });
+    const existingExpense = await RawExpensesDB.findExpenseById(input.id, userId);
     if (!existingExpense) throw new TRPCError({ code: "NOT_FOUND", message: "Expense not found" });
-    await db.expense.delete({ where: { id: input.id } });
+    await RawExpensesDB.deleteExpense(input.id, userId);
     return { success: true };
   });

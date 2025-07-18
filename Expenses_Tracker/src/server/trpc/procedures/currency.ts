@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { baseProcedure } from "~/server/trpc/main";
 import { fetchExchangeRate, convertAmount } from "~/server/utils/currency";
-import { db } from "~/server/db";
+import { RawCurrencyDB } from "~/server/db-raw";
 
 const getExchangeRateSchema = z.object({
   fromCurrency: z.string(),
@@ -47,17 +47,10 @@ export const convertCurrency = baseProcedure
 export const updateDailyExchangeRates = baseProcedure
   .mutation(async () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    today.setHours(0, 0, 0, 0);
     
-    // Verifica se abbiamo già aggiornato oggi
-    const existingUpdate = await db.exchangeRate.findFirst({
-      where: {
-        date: {
-          gte: today,
-          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Next day
-        },
-      },
-    });
+    // Verifica se abbiamo già aggiornato oggi usando SQL raw
+    const existingUpdate = await RawCurrencyDB.checkExistingRatesForDate(today);
 
     if (existingUpdate) {
       return {
@@ -68,15 +61,12 @@ export const updateDailyExchangeRates = baseProcedure
     }
 
     try {
-      // Valute principali del progetto
       const baseCurrencies = ['EUR', 'ZAR'];
-      // Valute target da aggiornare
       const targetCurrencies = ['USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SEK', 'NZD', 'MXN', 'INR'];
       
       let updatedRates = 0;
       
       for (const baseCurrency of baseCurrencies) {
-        // Fetch da API pubblica
         const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
         if (!response.ok) {
           console.error(`Failed to fetch rates for ${baseCurrency}`);
@@ -84,29 +74,12 @@ export const updateDailyExchangeRates = baseProcedure
         }
         
         const data = await response.json();
-        
-        // Aggiorna anche le valute base reciproche
         const allTargets = [...targetCurrencies, ...baseCurrencies.filter(c => c !== baseCurrency)];
         
         for (const targetCurrency of allTargets) {
           const rate = data.rates[targetCurrency];
           if (rate) {
-            await db.exchangeRate.upsert({
-              where: {
-                fromCurrency_toCurrency_date: {
-                  fromCurrency: baseCurrency,
-                  toCurrency: targetCurrency,
-                  date: today,
-                },
-              },
-              update: { rate },
-              create: {
-                fromCurrency: baseCurrency,
-                toCurrency: targetCurrency,
-                rate,
-                date: today,
-              },
-            });
+            await RawCurrencyDB.upsertExchangeRate(baseCurrency, targetCurrency, rate, today);
             updatedRates++;
           }
         }
@@ -133,14 +106,7 @@ export const updateDailyExchangeRates = baseProcedure
 export const getLastExchangeRateUpdate = baseProcedure
   .query(async () => {
     try {
-      const latestUpdate = await db.exchangeRate.findFirst({
-        orderBy: {
-          date: 'desc',
-        },
-        select: {
-          date: true,
-        },
-      });
+      const latestUpdate = await RawCurrencyDB.getLastExchangeRateUpdate();
 
       if (latestUpdate) {
         return {
@@ -168,26 +134,16 @@ export const getLastExchangeRateUpdate = baseProcedure
 export const getAvailableCurrencies = baseProcedure
   .query(async () => {
     try {
-      // Ottieni tutte le valute uniche dalla tabella exchange_rates
-      const currencies = await db.exchangeRate.findMany({
-        select: {
-          fromCurrency: true,
-          toCurrency: true,
-        },
-        distinct: ['fromCurrency', 'toCurrency'],
-      });
+      const currencies = await RawCurrencyDB.getAvailableCurrencies();
 
-      // Crea un set di tutte le valute uniche
       const currencySet = new Set<string>();
       currencies.forEach(rate => {
         currencySet.add(rate.fromCurrency);
         currencySet.add(rate.toCurrency);
       });
 
-      // Converti in array e ordina
       const availableCurrencies = Array.from(currencySet).sort();
 
-      // Mappa i nomi delle valute
       const currencyNames: Record<string, string> = {
         'EUR': 'Euro (€)',
         'USD': 'US Dollar ($)',
@@ -211,16 +167,35 @@ export const getAvailableCurrencies = baseProcedure
       }));
     } catch (error) {
       console.error('Error getting available currencies:', error);
-      // Fallback alle valute principali
-      return [
-        { code: 'EUR', name: 'Euro (€)', symbol: '€' },
-        { code: 'USD', name: 'US Dollar ($)', symbol: '$' },
-        { code: 'ZAR', name: 'South African Rand (R)', symbol: 'R' },
+      // Fallback completo con tutte le valute supportate
+      const fallbackCurrencies = [
+        'EUR', 'USD', 'GBP', 'ZAR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SEK', 'NZD', 'MXN', 'INR'
       ];
+      
+      const currencyNames: Record<string, string> = {
+        'EUR': 'Euro (€)',
+        'USD': 'US Dollar ($)',
+        'GBP': 'British Pound (£)', 
+        'ZAR': 'South African Rand (R)',
+        'JPY': 'Japanese Yen (¥)',
+        'AUD': 'Australian Dollar (A$)',
+        'CAD': 'Canadian Dollar (C$)',
+        'CHF': 'Swiss Franc (CHF)',
+        'CNY': 'Chinese Yuan (¥)',
+        'SEK': 'Swedish Krona (SEK)',
+        'NZD': 'New Zealand Dollar (NZ$)',
+        'MXN': 'Mexican Peso (MXN)',
+        'INR': 'Indian Rupee (₹)',
+      };
+      
+      return fallbackCurrencies.map(code => ({
+        code,
+        name: currencyNames[code] || code,
+        symbol: getSymbolForCurrency(code),
+      }));
     }
   });
 
-// Helper function per i simboli delle valute
 function getSymbolForCurrency(code: string): string {
   const symbols: Record<string, string> = {
     'EUR': '€',

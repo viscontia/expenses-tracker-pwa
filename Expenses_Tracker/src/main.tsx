@@ -37,11 +37,9 @@ const rootElement = document.getElementById("root")!;
 if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
-    <React.StrictMode>
-      <TRPCReactProvider>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" />
-      </TRPCReactProvider>
-    </React.StrictMode>,
+    <TRPCReactProvider>
+      <RouterProvider router={router} />
+      <Toaster position="top-right" />
+    </TRPCReactProvider>,
   );
 }

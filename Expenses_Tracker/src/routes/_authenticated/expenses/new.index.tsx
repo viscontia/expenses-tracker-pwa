@@ -40,10 +40,11 @@ const CURRENCIES = [
 function NewExpense() {
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
+  const defaultCurrency = useAuthStore((state) => state.user?.preferences?.defaultCurrency);
   
   // Get categories from backend
-  const { data: categories, isLoading: categoriesLoading } = trpc.categories.getCategories.useQuery(
-    { token: token || '' },
+  const { data: categories, isLoading: categoriesLoading } = trpc.categories.getAll.useQuery(
+    undefined,
     { enabled: !!token }
   );
 
@@ -69,9 +70,9 @@ function NewExpense() {
 
   const [formData, setFormData] = useState<FormData>({
     amount: '',
-    currency: 'EUR',
+    currency: 'EUR', // Inizialmente EUR, sarà aggiornato dal useEffect
     categoryId: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toISOString().split('T')[0] || new Date().toISOString().slice(0, 10),
     description: '',
   });
 
@@ -79,6 +80,16 @@ function NewExpense() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Aggiorna la valuta predefinita quando l'utente e le sue preferenze sono disponibili
+  useEffect(() => {
+    const safeCurrency = String(defaultCurrency || 'EUR');
+    
+    setFormData(prev => ({
+      ...prev,
+      currency: safeCurrency
+    }));
+  }, [defaultCurrency]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {};

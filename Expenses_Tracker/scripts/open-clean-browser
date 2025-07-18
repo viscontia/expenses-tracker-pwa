@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Script per aprire il browser in modalità sviluppo pulita
+# Uso: ./scripts/open-clean-browser
+
+echo "🧹 Apertura browser in modalità sviluppo pulita..."
+
+# Verifica se Chrome è disponibile
+if command -v "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" &> /dev/null; then
+    echo "📱 Apertura Chrome in modalità incognito senza estensioni..."
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+        --incognito \
+        --disable-extensions \
+        --disable-plugins \
+        --disable-default-apps \
+        --user-data-dir=/tmp/chrome-clean-dev \
+        "http://localhost:3000" &
+    echo "✅ Chrome aperto senza estensioni"
+    
+# Fallback per altri browser
+elif command -v open &> /dev/null; then
+    echo "📱 Apertura browser di default..."
+    open "http://localhost:3000"
+    echo "⚠️  Ricorda di disabilitare manualmente le estensioni"
+    
+else
+    echo "❌ Browser non trovato. Apri manualmente:"
+    echo "   URL: http://localhost:3000"
+    echo "   Modalità: Incognito/Privata senza estensioni"
+fi
+
+echo ""
+echo "🎯 Per eliminare completamente gli errori console:"
+echo "   1. Usa la finestra appena aperta (senza estensioni)"
+echo "   2. Oppure disabilita manualmente le estensioni in chrome://extensions/"
+echo "   3. Oppure usa un profilo browser dedicato allo sviluppo"
+

@@ -14,6 +14,7 @@ model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
+  role      String   @default("user") // "user" or "admin"
   preferences Json?  // Store user preferences like theme, default currency
   createdAt DateTime @default(now())
   
@@ -51,10 +52,33 @@ model Expense {
   createdAt      DateTime @default(now())
   
   // Relations
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        Category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  historicalRates ExpenseExchangeRate[]
   
+  // Optimized indexes for common queries
+  @@index([userId, date])           // For user expenses by date
+  @@index([userId, currency])       // For user expenses by currency
+  @@index([date])                   // For date range queries
+  @@index([currency, date])         // For currency-specific date queries
+  @@index([userId, createdAt])      // For recent expenses by user
   @@map("expenses")
+}
+
+model ExpenseExchangeRate {
+  id           Int      @id @default(autoincrement())
+  expenseId    Int
+  fromCurrency String   @db.VarChar(3)
+  toCurrency   String   @db.VarChar(3)
+  rate         Decimal  @db.Decimal(15,8)
+  createdAt    DateTime @default(now())
+  
+  expense      Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  
+  @@unique([expenseId, fromCurrency, toCurrency])
+  @@index([expenseId])
+  @@index([fromCurrency, toCurrency])
+  @@map("expense_exchange_rates")
 }
 
 model ExchangeRate {

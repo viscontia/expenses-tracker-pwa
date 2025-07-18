@@ -28,6 +28,18 @@ export default defineEventHandler((event) => {
     return new Response("No request", { status: 400 });
   }
 
+  // Handle simple health check endpoint directly - NO HEAVY MONITORING
+  if (request.url.endsWith('/health')) {
+    return new Response(JSON.stringify({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      message: 'Server is responding'
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   return fetchRequestHandler({
     endpoint: "/trpc",
     req: request,

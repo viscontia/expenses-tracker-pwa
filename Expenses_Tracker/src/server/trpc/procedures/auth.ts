@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { baseProcedure, protectedProcedure } from "~/server/trpc/main";
-import { db } from "~/server/db";
+import { RawAuthDB } from "~/server/db-raw";
 import { hashPassword, verifyPassword, signToken } from "~/server/utils/auth";
 
 const registerSchema = z.object({
@@ -19,7 +19,7 @@ const tokenSchema = z.object({
 });
 
 const preferencesSchema = z.object({
-  theme: z.enum(['light', 'dark']).optional(),
+  theme: z.enum(['light', 'dark', 'auto']).optional(),
   defaultCurrency: z.string().optional(),
   currencyOrder: z.array(z.string()).optional(),
   chartCategoryCount: z.number().optional(),
@@ -30,32 +30,23 @@ export const register = baseProcedure
   .mutation(async ({ input }) => {
     const { email, password } = input;
 
-    // Check if user already exists
-    const existingUser = await db.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
+    // Check if user already exists using raw SQL
+    const userExists = await RawAuthDB.checkUserExists(email);
+    if (userExists) {
       throw new TRPCError({
         code: "CONFLICT",
         message: "User with this email already exists",
       });
     }
 
-    // Hash password and create user
+    // Hash password and create user using raw SQL
     const hashedPassword = await hashPassword(password);
-    const newUser = await db.user.create({
-      data: {
-        email: input.email,
-        password: hashedPassword,
-      },
-    });
+    const newUser = await RawAuthDB.createUser(email, hashedPassword);
 
     // Generate token
     const token = signToken(newUser.id, process.env.JWT_SECRET!);
 
-    const { password: _, ...userResponse } = newUser;
-    return { user: userResponse, token };
+    return { user: newUser, token };
   });
 
 export const login = baseProcedure
@@ -63,11 +54,8 @@ export const login = baseProcedure
   .mutation(async ({ input }) => {
     const { email, password } = input;
 
-    // Find user
-    const user = await db.user.findUnique({
-      where: { email },
-    });
-
+    // Find user using raw SQL
+    const user = await RawAuthDB.findUserByEmail(email);
     if (!user) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
@@ -88,7 +76,6 @@ export const login = baseProcedure
     const token = signToken(user.id, process.env.JWT_SECRET!);
 
     const { password: _, ...userResponse } = user;
-
     return {
       user: userResponse,
       token,
@@ -96,33 +83,22 @@ export const login = baseProcedure
   });
 
 export const getCurrentUser = protectedProcedure.query(async ({ ctx }) => {
-  try {
-    const user = await db.user.findUnique({
-      where: { id: ctx.user.id },
-    });
-
-    if (!user) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "User not found - please login again",
-      });
-    }
-
-    const { password, ...userResponse } = user;
-    return userResponse;
-  } catch (error) {
-    // If there's any database error, treat as unauthorized
+  // Use raw SQL to get user
+  const user = await RawAuthDB.findUserById(ctx.user.id);
+  if (!user) {
     throw new TRPCError({
-      code: "UNAUTHORIZED", 
-      message: "Authentication failed - please login again",
+      code: "UNAUTHORIZED",
+      message: "User not found - please login again",
     });
   }
+
+  return user;
 });
 
 export const updatePreferences = protectedProcedure
   .input(
     z.object({
-      theme: z.enum(["light", "dark"]).optional(),
+      theme: z.enum(["light", "dark", "auto"]).optional(),
       defaultCurrency: z.string().optional(),
       currencyOrder: z.array(z.string()).optional(),
       chartCategoryCount: z.number().optional(),
@@ -130,25 +106,19 @@ export const updatePreferences = protectedProcedure
   )
   .mutation(async ({ ctx, input }) => {
     const userId = ctx.user.id;
-    const user = await db.user.findUnique({ where: { id: userId } });
-
+    
+    // Get current user using raw SQL
+    const user = await RawAuthDB.findUserById(userId);
     if (!user) {
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found." });
     }
 
     const currentPreferences = (user.preferences as object) ?? {};
-
     const updatedPreferences = {
       ...currentPreferences,
       ...input,
     };
 
-    await db.user.update({
-      where: { id: userId },
-      data: {
-        preferences: updatedPreferences,
-      },
-    });
-
-    return { success: true };
+    // Update preferences using raw SQL
+    return await RawAuthDB.updateUserPreferences(userId, updatedPreferences);
   });

@@ -1,8 +1,9 @@
-import { X } from 'lucide-react';
+import { X, TrendingUp } from 'lucide-react';
 import type { AppRouter } from '~/server/trpc/root';
 import type { inferRouterOutputs } from '@trpc/server';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { RateIndicator } from '~/components/RateIndicator';
 
 type RouterOutput = inferRouterOutputs<AppRouter>;
 type Expense = RouterOutput['expenses']['getExpenses']['expenses'][number];
@@ -20,11 +21,12 @@ export function ExpenseDetailTable({
     const doc = new jsPDF();
     doc.text(title, 14, 16);
     (doc as any).autoTable({
-      head: [['Data', 'Descrizione', 'Categoria', 'Importo']],
+      head: [['Data', 'Descrizione', 'Categoria', 'Tasso di Cambio', 'Importo']],
       body: data.map(e => [
         new Date(e.date).toLocaleDateString('it-IT'),
         e.description,
         e.category.name,
+        `${e.conversionRate.toFixed(4)} ${e.currency}/EUR`,
         new Intl.NumberFormat('it-IT', {
           style: 'currency',
           currency: e.currency,
@@ -61,6 +63,7 @@ export function ExpenseDetailTable({
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Data</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Descrizione</th>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Categoria</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Tasso di Cambio</th>
               <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Importo</th>
             </tr>
           </thead>
@@ -72,6 +75,13 @@ export function ExpenseDetailTable({
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">{expense.description}</td>
                 <td className="whitespace-nowrap px-6 py-4">{expense.category.name}</td>
+                <td className="whitespace-nowrap px-6 py-4">
+                  <RateIndicator
+                    rate={expense.conversionRate}
+                    fromCurrency={expense.currency}
+                    toCurrency="EUR"
+                  />
+                </td>
                 <td className="whitespace-nowrap px-6 py-4 text-right">
                   {new Intl.NumberFormat('it-IT', {
                     style: 'currency',

@@ -6,13 +6,13 @@ const urlsToCache = [
   '/expenses/new',
   '/settings',
   '/login',
-  '/register',
-  '/src/styles.css',
-  '/src/main.tsx'
+  '/register'
+  // Rimuovo i file di sviluppo dalla cache
 ];
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
+  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -27,13 +27,18 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
-  // Skip caching for API requests and POST requests
+  // Skip caching for development files, API requests and POST requests
   if (event.request.url.includes('/trpc/') || 
       event.request.method !== 'GET' ||
       event.request.url.includes('/_vite/') ||
       event.request.url.includes('/@vite/') ||
-      event.request.url.includes('/@fs/')) {
-    return;
+      event.request.url.includes('/@fs/') ||
+      event.request.url.includes('/src/') ||
+      event.request.url.includes('.tsx') ||
+      event.request.url.includes('.ts') ||
+      event.request.url.includes('.jsx') ||
+      event.request.url.includes('.js') && event.request.url.includes('localhost')) {
+    return; // Non intercettare questi requests
   }
 
   event.respondWith(
@@ -53,8 +58,11 @@ self.addEventListener('fetch', (event) => {
             return response;
           }
           
-          // Only cache GET requests for static resources
-          if (event.request.method === 'GET') {
+          // Only cache GET requests for static resources (not development files)
+          if (event.request.method === 'GET' && 
+              !event.request.url.includes('/src/') &&
+              !event.request.url.includes('.tsx') &&
+              !event.request.url.includes('.ts')) {
             const responseToCache = response.clone();
             
             caches.open(CACHE_NAME)
@@ -76,6 +84,7 @@ self.addEventListener('fetch', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
+  console.log('Service Worker activating...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(

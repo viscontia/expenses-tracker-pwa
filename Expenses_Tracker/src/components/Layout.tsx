@@ -9,28 +9,36 @@ import {
   MenuIcon,
   XIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  ListIcon
 } from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
+import { useSettingsModalStore } from '~/stores/settingsModal';
 import { InstallPWAButton } from '~/components/InstallPWAButton';
+import { SettingsModal } from '~/components/SettingsModal';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Add Expense', href: '/expenses/new', icon: PlusIcon },
-  { name: 'Categories', href: '/categories', icon: TagIcon },
-  { name: 'Settings', href: '/settings', icon: CogIcon },
-];
+// Definisco la navigazione con un tipo speciale per Settings che aprirà una modale
+const baseNavigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, type: 'link' },
+  { name: 'View Expenses', href: '/expenses', icon: ListIcon, type: 'link' },
+  { name: 'Add Expense', href: '/expenses/new', icon: PlusIcon, type: 'link' },
+  { name: 'Categories', href: '/categories', icon: TagIcon, type: 'link' },
+  { name: 'Settings', icon: CogIcon, type: 'modal' },
+] as const;
 
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { user, logout, setTheme } = useAuthStore();
+  const { isOpen: isSettingsOpen, open: openSettings, close: closeSettings } = useSettingsModalStore();
   
   const isDark = user?.preferences?.theme === 'dark';
+  
+  const navigation = baseNavigation;
 
   const handleToggleTheme = () => {
     setTheme(isDark ? 'light' : 'dark');
@@ -62,21 +70,34 @@ export function Layout({ children }: LayoutProps) {
             <nav className="flex-1 px-4 py-4">
               <ul className="space-y-2">
                 {navigation.map((item) => {
-                  const isActive = location.pathname === item.href;
+                  const isActive = item.type === 'link' ? location.pathname === item.href : false;
                   return (
                     <li key={item.name}>
-                      <Link
-                        to={item.href}
-                        className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                        }`}
-                        onClick={() => setSidebarOpen(false)}
-                      >
-                        <item.icon className="mr-3 h-5 w-5" />
-                        {item.name}
-                      </Link>
+                      {item.type === 'link' ? (
+                        <Link
+                          to={item.href!}
+                          className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                              : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                          }`}
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <item.icon className="mr-3 h-5 w-5" />
+                          {item.name}
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            openSettings();
+                            setSidebarOpen(false);
+                          }}
+                          className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          <item.icon className="mr-3 h-5 w-5" />
+                          {item.name}
+                        </button>
+                      )}
                     </li>
                   );
                 })}
@@ -127,20 +148,30 @@ export function Layout({ children }: LayoutProps) {
             <nav className="flex-1 px-4 py-4">
               <ul className="space-y-2">
                 {navigation.map((item) => {
-                  const isActive = location.pathname === item.href;
+                  const isActive = item.type === 'link' ? location.pathname === item.href : false;
                   return (
                     <li key={item.name}>
-                      <Link
-                        to={item.href}
-                        className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        <item.icon className="mr-3 h-5 w-5" />
-                        {item.name}
-                      </Link>
+                      {item.type === 'link' ? (
+                        <Link
+                          to={item.href!}
+                          className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                              : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          <item.icon className="mr-3 h-5 w-5" />
+                          {item.name}
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={openSettings}
+                          className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                        >
+                          <item.icon className="mr-3 h-5 w-5" />
+                          {item.name}
+                        </button>
+                      )}
                     </li>
                   );
                 })}
@@ -204,6 +235,9 @@ export function Layout({ children }: LayoutProps) {
             </div>
           </main>
         </div>
+        
+        {/* Settings Modal */}
+        <SettingsModal isOpen={isSettingsOpen} onClose={closeSettings} />
       </div>
     </div>
   );

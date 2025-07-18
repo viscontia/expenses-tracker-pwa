@@ -13,8 +13,8 @@ type AuthState = {
   isLoading: boolean;
   rememberMe: boolean;
   savedEmail: string | null;
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
+  theme: 'light' | 'dark' | 'auto';
+  setTheme: (theme: 'light' | 'dark' | 'auto') => void;
   setUser: (user: User | null) => void;
   setRememberMe: (remember: boolean) => void;
   login: (user: User, token: string) => void;
@@ -23,16 +23,35 @@ type AuthState = {
   updateUserPreferences: (prefs: Partial<UserPreferences>) => void;
 };
 
-const getInitialTheme = (): 'light' | 'dark' => {
+const applyTheme = (theme: 'light' | 'dark') => {
+  document.documentElement.classList.remove('light', 'dark');
+  document.documentElement.classList.add(theme);
+};
+
+const getSystemTheme = (): 'light' | 'dark' => {
   if (typeof window !== 'undefined') {
-    const savedTheme = localStorage.getItem(THEME_KEY) as 'light' | 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return 'light';
+};
+
+const getInitialTheme = (): 'light' | 'dark' | 'auto' => {
+  if (typeof window !== 'undefined') {
+    const savedTheme = localStorage.getItem(THEME_KEY) as 'light' | 'dark' | 'auto';
     if (savedTheme) {
-      document.documentElement.classList.add(savedTheme);
+      // Se è auto, applica il tema del sistema, altrimenti applica quello salvato
+      if (savedTheme === 'auto') {
+        const systemTheme = getSystemTheme();
+        applyTheme(systemTheme);
+      } else {
+        applyTheme(savedTheme);
+      }
       return savedTheme;
     }
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.classList.add(systemTheme);
-    return systemTheme;
+    // Se non c'è tema salvato, usa 'auto' come default
+    const systemTheme = getSystemTheme();
+    applyTheme(systemTheme);
+    return 'auto';
   }
   return 'light';
 };
@@ -41,6 +60,9 @@ const getInitialRememberMe = (): boolean => {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(REMEMBER_ME_KEY) === 'true';
 }
+
+// Listener per cambiamenti del tema del sistema
+let mediaQueryListener: ((e: MediaQueryListEvent) => void) | null = null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
     user: null,
@@ -52,8 +74,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     theme: getInitialTheme(),
     setTheme: (theme) => {
       set({ theme });
-      document.documentElement.classList.remove('light', 'dark');
-      document.documentElement.classList.add(theme);
+      
+      // Rimuovi il listener precedente se esiste
+      if (mediaQueryListener && typeof window !== 'undefined') {
+        window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', mediaQueryListener);
+        mediaQueryListener = null;
+      }
+      
+      if (theme === 'auto') {
+        // Applica il tema del sistema
+        const systemTheme = getSystemTheme();
+        applyTheme(systemTheme);
+        
+        // Aggiungi listener per cambiamenti del tema del sistema
+        if (typeof window !== 'undefined') {
+          const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+          mediaQueryListener = (e: MediaQueryListEvent) => {
+            const newSystemTheme = e.matches ? 'dark' : 'light';
+            applyTheme(newSystemTheme);
+          };
+          mediaQuery.addEventListener('change', mediaQueryListener);
+        }
+      } else {
+        // Applica il tema specifico
+        applyTheme(theme);
+      }
+      
       localStorage.setItem(THEME_KEY, theme);
       if (get().isAuthenticated) {
         get().updateUserPreferences({ theme });
@@ -62,7 +108,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     setUser: (user) => {
       set({ user, isAuthenticated: !!user });
       if (user && user.preferences?.theme) {
-        get().setTheme(user.preferences.theme as 'light' | 'dark');
+        get().setTheme(user.preferences.theme as 'light' | 'dark' | 'auto');
       }
     },
     setRememberMe: (remember) => {
@@ -81,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ savedEmail: user.email });
       }
       if (user.preferences?.theme) {
-        get().setTheme(user.preferences.theme as 'light' | 'dark');
+        get().setTheme(user.preferences.theme as 'light' | 'dark' | 'auto');
       }
     },
     logout: () => {

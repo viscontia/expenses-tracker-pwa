@@ -1,5 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { verifyToken, type UserJWTPayload } from '~/server/utils/auth';
+import { UserRole } from '~/server/utils/roles';
+import { db } from '~/server/db';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
 
@@ -42,6 +44,8 @@ const isAuthed = t.middleware(({ ctx, next }) => {
     },
   });
 });
+
+
 
 export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;

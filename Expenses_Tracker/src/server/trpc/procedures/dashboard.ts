@@ -1,41 +1,54 @@
 import { z } from "zod";
 import { protectedProcedure } from "~/server/trpc/main";
-import { db } from "~/server/db";
 import { TRPCError } from "@trpc/server";
+import { historicalRateService } from "~/server/services/historical-rate";
+import { RawDashboardDB } from "~/server/db-dashboard";
+
+// Funzione semplice per eseguire query senza profiling
+const executeQuery = async <T>(queryFn: () => Promise<T>): Promise<T> => {
+  return await queryFn();
+};
 
 /**
- * Converte un importo da una valuta all'altra usando i tassi di cambio più recenti
+ * Converte un importo da una valuta all'altra usando tassi storici quando disponibili o tassi correnti come fallback
+ * VERSIONE ORIGINALE - mantenuta come fallback
  */
-const convertCurrency = async (amount: number, fromCurrency: string, toCurrency: string): Promise<number> => {
+const convertCurrency = async (
+  amount: number, 
+  fromCurrency: string, 
+  toCurrency: string, 
+  expenseId?: number
+): Promise<number> => {
   if (fromCurrency === toCurrency) {
     return amount;
   }
 
+  // Try to use historical rate if expenseId is provided
+  if (expenseId) {
+    try {
+      const convertedAmount = await historicalRateService.convertWithHistoricalRate(
+        amount, 
+        fromCurrency, 
+        toCurrency, 
+        expenseId
+      );
+      return convertedAmount;
+    } catch (error) {
+      console.warn(`Failed to use historical rate for expense ${expenseId}, falling back to current rates:`, error);
+      // Continue to fallback logic below
+    }
+  }
+
+  // Fallback to current rates logic
   // Cerca il tasso di cambio più recente
-  const exchangeRate = await db.exchangeRate.findFirst({
-    where: {
-      fromCurrency,
-      toCurrency,
-    },
-    orderBy: {
-      date: 'desc',
-    },
-  });
+  const exchangeRate = await RawDashboardDB.getLatestExchangeRate(fromCurrency, toCurrency);
 
   if (exchangeRate) {
     return amount * exchangeRate.rate;
   }
 
   // Se non trova il tasso diretto, prova il tasso inverso
-  const inverseRate = await db.exchangeRate.findFirst({
-    where: {
-      fromCurrency: toCurrency,
-      toCurrency: fromCurrency,
-    },
-    orderBy: {
-      date: 'desc',
-    },
-  });
+  const inverseRate = await RawDashboardDB.getLatestExchangeRate(toCurrency, fromCurrency);
 
   if (inverseRate && inverseRate.rate !== 0) {
     return amount / inverseRate.rate;
@@ -47,28 +60,69 @@ const convertCurrency = async (amount: number, fromCurrency: string, toCurrency:
 };
 
 /**
- * Calculates the total expenses in a target currency for a given user and period.
- * It converts amounts from other currencies using real-time exchange rates.
+ * OTTIMIZZAZIONE: Converte valuta usando tassi già caricati (evita query N+1)
  */
-const getTotalExpensesForPeriod = async (
+const convertCurrencyOptimized = async (
+  amount: number, 
+  fromCurrency: string, 
+  toCurrency: string, 
+  historicalRates: Array<{ fromCurrency: string; toCurrency: string; rate: number }>,
+  expenseId?: number
+): Promise<number> => {
+  if (fromCurrency === toCurrency) {
+    return amount;
+  }
+
+  // Cerca il tasso storico tra quelli già caricati
+  const historicalRate = historicalRates.find(
+    rate => rate.fromCurrency === fromCurrency && rate.toCurrency === toCurrency
+  );
+
+  if (historicalRate) {
+    return amount * historicalRate.rate;
+  }
+
+  // Fallback ai tassi correnti solo se non trova tasso storico
+  const exchangeRate = await RawDashboardDB.getLatestExchangeRate(fromCurrency, toCurrency);
+
+  if (exchangeRate) {
+    return amount * exchangeRate.rate;
+  }
+
+  // Se non trova il tasso diretto, prova il tasso inverso
+  const inverseRate = await RawDashboardDB.getLatestExchangeRate(toCurrency, fromCurrency);
+
+  if (inverseRate && inverseRate.rate !== 0) {
+    return amount / inverseRate.rate;
+  }
+
+  // Fallback: se non trova nessun tasso, restituisce l'importo originale
+  console.warn(`No exchange rate found for ${fromCurrency} to ${toCurrency}`);
+  return amount;
+};
+
+/**
+ * VERSIONE OTTIMIZZATA: Calcola il totale spese usando JOIN query invece di N+1 query
+ */
+const getTotalExpensesForPeriodOptimized = async (
   userId: number, 
   startDate: Date, 
   endDate: Date, 
   targetCurrency: string = 'EUR'
 ): Promise<number> => {
-    const expenses = await db.expense.findMany({
-        where: {
-            userId,
-            date: {
-                gte: startDate,
-                lte: endDate,
-            },
-        },
-    });
+    // UNA SOLA QUERY con JOIN per ottenere spese + tassi storici
+    const expensesWithRates = await RawDashboardDB.getExpensesWithHistoricalRates(userId, startDate, endDate);
 
     let total = 0;
-    for (const expense of expenses) {
-        const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
+    for (const expense of expensesWithRates) {
+        // Usa i tassi già caricati, evita query separate
+        const convertedAmount = await convertCurrencyOptimized(
+          expense.amount, 
+          expense.currency, 
+          targetCurrency, 
+          expense.historicalRates,
+          expense.id
+        );
         total += convertedAmount;
     }
     return total;
@@ -76,15 +130,7 @@ const getTotalExpensesForPeriod = async (
 
 // Nuova funzione per ottenere le statistiche transazioni
 const getTransactionCount = async (userId: number, startDate: Date, endDate: Date): Promise<number> => {
-    const count = await db.expense.count({
-        where: {
-            userId,
-            date: {
-                gte: startDate,
-                lte: endDate,
-            },
-        },
-    });
+    const count = await RawDashboardDB.countExpensesByPeriod(userId, startDate, endDate);
     return count;
 };
 
@@ -96,6 +142,28 @@ export const getKpis = protectedProcedure
         const userId = ctx.user.id;
         const targetCurrency = input?.targetCurrency ?? 'EUR';
         const now = new Date();
+        
+        console.log(`[PROFILING] === STARTING getKpis for userId: ${userId}, currency: ${targetCurrency} ===`);
+        
+        // OTTIMIZZAZIONE: Controllo rapido se l'utente ha spese prima di fare calcoli costosi
+        const userExpenseCount = await executeQuery( 
+            () => RawDashboardDB.getUserExpenseCount(userId)
+        );
+        
+        // Se non ci sono spese, restituisci valori vuoti immediatamente
+        if (userExpenseCount === 0) {
+            console.log(`[PROFILING] === Early return: 0 expenses found ===`);
+            return {
+                totalCurrentMonth: 0,
+                totalPreviousMonth: 0,
+                comparativeCurrentMonth: 0,
+                totalCurrentYear: 0,
+                totalPreviousYear: 0,
+                comparativeCurrentYear: 0,
+                transactionCount: 0,
+                targetCurrency,
+            };
+        }
         
         // Current Month Dates
         const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -128,15 +196,30 @@ export const getKpis = protectedProcedure
             comparativeCurrentYear,
             transactionCount,
         ] = await Promise.all([
-            getTotalExpensesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, targetCurrency),
-            getTotalExpensesForPeriod(userId, startOfPreviousMonth, endOfPreviousMonth, targetCurrency),
-            getTotalExpensesForPeriod(userId, startOfPreviousMonth, comparativeDateInPreviousMonth, targetCurrency),
-            getTotalExpensesForPeriod(userId, startOfCurrentYear, endOfCurrentYear, targetCurrency),
-            getTotalExpensesForPeriod(userId, startOfPreviousYear, endOfPreviousYear, targetCurrency),
-            getTotalExpensesForPeriod(userId, startOfPreviousYear, comparativeDateInPreviousYear, targetCurrency),
-            getTransactionCount(userId, startOfCurrentMonth, endOfCurrentMonth),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfCurrentMonth, endOfCurrentMonth, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfPreviousMonth, endOfPreviousMonth, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfPreviousMonth, comparativeDateInPreviousMonth, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfCurrentYear, endOfCurrentYear, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfPreviousYear, endOfPreviousYear, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTotalExpensesForPeriodOptimized(userId, startOfPreviousYear, comparativeDateInPreviousYear, targetCurrency)
+            ),
+            executeQuery(() => 
+                getTransactionCount(userId, startOfCurrentMonth, endOfCurrentMonth)
+            ),
         ]);
 
+        console.log(`[PROFILING] === COMPLETED getKpis ===`);
         return {
             totalCurrentMonth,
             totalPreviousMonth,
@@ -156,15 +239,13 @@ const getTopCategoriesForPeriod = async (
   limit: number,
   targetCurrency: string = 'EUR'
 ) => {
-    const expenses = await db.expense.findMany({
-        where: { userId, date: { gte: startDate, lte: endDate } },
-        select: { amount: true, currency: true, categoryId: true },
-    });
+    const expenses = await RawDashboardDB.getExpensesByPeriod(userId, startDate, endDate);
 
     const categoryTotals = new Map<number, number>();
 
     for (const expense of expenses) {
-        const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
+        // Pass expense ID to enable historical rate conversion
+        const convertedAmount = await convertCurrencyOptimized(expense.amount, expense.currency, targetCurrency, [], expense.id);
         const currentTotal = categoryTotals.get(expense.categoryId) || 0;
         categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     }
@@ -176,10 +257,8 @@ const getTopCategoriesForPeriod = async (
 
     if (sortedCategories.length === 0) return [];
     
-    const categories = await db.category.findMany({
-        where: { id: { in: sortedCategories } },
-        select: { id: true, name: true },
-    });
+    const allCategories = await RawDashboardDB.getCategoriesByUser(userId);
+    const categories = allCategories.filter(c => sortedCategories.includes(c.id));
 
     const categoryMap = new Map(categories.map(c => [c.id, c.name]));
 
@@ -198,7 +277,7 @@ const getMonthlyTrend = async (userId: number, months: number, targetCurrency: s
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const startDate = new Date(date.getFullYear(), date.getMonth(), 1);
         const endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-        const total = await getTotalExpensesForPeriod(userId, startDate, endDate, targetCurrency);
+        const total = await getTotalExpensesForPeriodOptimized(userId, startDate, endDate, targetCurrency);
         
         trendData.push({
             month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
@@ -216,7 +295,7 @@ const getYearlyTrend = async (userId: number, years: number, targetCurrency: str
         const year = now.getFullYear() - i;
         const startDate = new Date(year, 0, 1);
         const endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-        const total = await getTotalExpensesForPeriod(userId, startDate, endDate, targetCurrency);
+        const total = await getTotalExpensesForPeriodOptimized(userId, startDate, endDate, targetCurrency);
 
         trendData.push({
             year: String(year),
@@ -239,6 +318,23 @@ export const getChartData = protectedProcedure
         const limit = input?.topCategoriesLimit ?? 10;
         const targetCurrency = input?.targetCurrency ?? 'EUR';
 
+        console.log(`[PROFILING] === STARTING getChartData for userId: ${userId}, currency: ${targetCurrency} ===`);
+
+        // OTTIMIZZAZIONE: Controllo rapido se l'utente ha spese prima di fare calcoli costosi
+        const userExpenseCount = await executeQuery( 
+            () => RawDashboardDB.getUserExpenseCount(userId)
+        );
+        
+        // Se non ci sono spese, restituisci valori vuoti immediatamente
+        if (userExpenseCount === 0) {
+            console.log(`[PROFILING] === Early return: 0 expenses found in getChartData ===`);
+            return {
+                categoryExpenses: [],
+                monthlyTrend: [],
+                targetCurrency,
+            };
+        }
+
         // Date ranges
         const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -253,10 +349,15 @@ export const getChartData = protectedProcedure
             categoryExpenses,
             monthlyTrend,
         ] = await Promise.all([
-            getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, limit, targetCurrency),
-            getMonthlyTrend(userId, 12, targetCurrency),
+            executeQuery(() => 
+                getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, limit, targetCurrency)
+            ),
+            executeQuery(() => 
+                getMonthlyTrend(userId, 12, targetCurrency)
+            ),
         ]);
 
+        console.log(`[PROFILING] === COMPLETED getChartData ===`);
         return {
             categoryExpenses,
             monthlyTrend,
@@ -274,26 +375,64 @@ export const getRecentExpenses = protectedProcedure
         const limit = input?.limit ?? 10;
         const targetCurrency = input?.targetCurrency ?? 'EUR';
 
-        const expenses = await db.expense.findMany({
-            where: { userId },
-            include: { category: true },
-            orderBy: { date: 'desc' },
-            take: limit,
-        });
+        console.log(`[PROFILING] === STARTING getRecentExpenses for userId: ${userId}, currency: ${targetCurrency} ===`);
 
-        // Converte gli importi nella valuta target
+        // OTTIMIZZAZIONE: Controllo rapido se l'utente ha spese prima di fare calcoli costosi
+        const userExpenseCount = await executeQuery( 
+            () => RawDashboardDB.getUserExpenseCount(userId)
+        );
+        
+        // Se non ci sono spese, restituisci array vuoto immediatamente
+        if (userExpenseCount === 0) {
+            return [];
+        }
+
+        const rawExpenses = await executeQuery(() => 
+            RawDashboardDB.getRecentExpenses(userId, limit)
+        );
+        
+        // Get categories for all expenses
+        const allCategories = await RawDashboardDB.getCategoriesByUser(userId);
+        const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+        
+        // Map raw expenses to include category data
+        const expenses = rawExpenses.map(expense => ({
+            ...expense,
+            category: categoryMap.get(expense.categoryId) || { id: expense.categoryId, name: 'Unknown' }
+        }));
+
+        // Converte gli importi nella valuta target usando tassi storici quando disponibili
         const convertedExpenses = await Promise.all(
             expenses.map(async (expense) => {
-                const convertedAmount = await convertCurrency(expense.amount, expense.currency, targetCurrency);
+                // Pass expense ID to enable historical rate conversion
+                const convertedAmount = await convertCurrencyOptimized(expense.amount, expense.currency, targetCurrency, [], expense.id);
+                
+                // Get historical rate information for display
+                let historicalRate: number | null = null;
+                let rateSource: 'historical' | 'current' | 'same_currency' = 'same_currency';
+                
+                if (expense.currency !== targetCurrency) {
+                    try {
+                        historicalRate = await historicalRateService.getHistoricalRate(expense.id, expense.currency, targetCurrency);
+                        rateSource = historicalRate !== null ? 'historical' : 'current';
+                    } catch (error) {
+                        console.warn(`Failed to get historical rate info for expense ${expense.id}:`, error);
+                        rateSource = 'current';
+                    }
+                }
+                
                 return {
                     ...expense,
                     convertedAmount,
                     originalAmount: expense.amount,
                     originalCurrency: expense.currency,
                     targetCurrency,
+                    historicalRate,
+                    rateSource,
                 };
             })
         );
 
+        console.log(`[PROFILING] === COMPLETED getRecentExpenses ===`);
         return convertedExpenses;
     }); 

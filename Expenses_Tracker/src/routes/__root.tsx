@@ -4,34 +4,11 @@ import {
   createRootRoute,
   useRouterState,
 } from "@tanstack/react-router";
-import { Toaster } from 'react-hot-toast';
-import { TRPCReactProvider } from "~/trpc/react";
 import { useAuthStore } from '~/stores/auth';
-import { Layout } from '~/components/Layout';
-import { useExchangeRateUpdater } from '~/hooks/useExchangeRateUpdater';
 
 export const rootRoute = createRootRoute({
   component: RootComponent,
 });
-
-// Componente interno che ha accesso al TRPC
-function AppContent() {
-  // Attiva l'aggiornamento automatico quotidiano delle valute
-  useExchangeRateUpdater();
-  
-  return (
-    <>
-      <Outlet />
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          className: 'dark:bg-gray-800 dark:text-white',
-          duration: 4000,
-        }}
-      />
-    </>
-  );
-}
 
 function RootComponent() {
   const isFetching = useRouterState({ select: (s) => s.isLoading });
@@ -52,9 +29,5 @@ function RootComponent() {
     );
   }
 
-  return (
-    <TRPCReactProvider>
-      <AppContent />
-    </TRPCReactProvider>
-  );
+  return <Outlet />;
 }

@@ -4,7 +4,7 @@ import { db } from '~/server/db'
 import type { User as PrismaUser } from '@prisma/client'
 
 export interface UserPreferences {
-	theme?: 'light' | 'dark'
+	theme?: 'light' | 'dark' | 'auto'
 	defaultCurrency?: string
 	currencyOrder?: string[]
 	chartCategoryCount?: number
