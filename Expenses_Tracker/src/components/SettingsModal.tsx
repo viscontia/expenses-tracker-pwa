@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
+import { useUnsavedChangesGuard, UnsavedChangesModal } from './UnsavedChangesGuard';
 import { useAuthStore } from '~/stores/auth';
 import { trpc } from '~/trpc/react';
 import { 
@@ -123,6 +124,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     ) || [];
   }, [availableCurrencies, currencyOrder]);
 
+  // Form data object for unsaved changes guard
+  const formData = useMemo(() => ({
+    selectedTheme,
+    defaultCurrency,
+    chartCategoryCount,
+    currencyOrder,
+    selectedCurrencyToAdd
+  }), [selectedTheme, defaultCurrency, chartCategoryCount, currencyOrder, selectedCurrencyToAdd]);
+
   // Handle save preferences
   const handleSavePreferences = async () => {
     setIsLoading(true);
@@ -141,14 +151,105 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
+  // Unsaved changes guard (for navigation protection)
+  const {
+    hasUnsavedChanges,
+    resetChanges
+  } = useUnsavedChangesGuard({
+    formData,
+    onSave: handleSavePreferences,
+    isSaving: isLoading || updatePreferencesMutation.isPending,
+    disabled: false,
+    message: "Le tue impostazioni sono state modificate. Vuoi salvarle prima di chiudere?"
+  });
+
+  // Local state for modal close confirmation
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Handle modal close with unsaved changes check
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Handle save and close
+  const handleSaveAndClose = async () => {
+    try {
+      await handleSavePreferences();
+      resetChanges();
+      setShowCloseConfirm(false);
+      onClose();
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
+
+  // Handle close without saving
+  const handleCloseWithoutSaving = () => {
+    setShowCloseConfirm(false);
+    onClose();
+  };
+
+  // Cancel close action
+  const handleCancelClose = () => {
+    setShowCloseConfirm(false);
+  };
+
+  // Supporto per Ctrl+S / Cmd+S per salvare
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasUnsavedChanges) {
+          handleSavePreferences();
+        }
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hasUnsavedChanges, isOpen]);
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Impostazioni"
-      size="lg"
-    >
-      <div className="p-6 space-y-8">
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={handleClose}
+        title="Impostazioni"
+        size="lg"
+      >
+        <div className="relative">
+          {/* Indicatore visivo delle modifiche non salvate */}
+          {hasUnsavedChanges && (
+            <div className="absolute top-4 right-4 z-10">
+              <div className="flex items-center space-x-2 bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-medium border border-amber-200 dark:border-amber-800 shadow-sm">
+                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                <span>Modifiche non salvate</span>
+              </div>
+            </div>
+          )}
+          
+          <div className="p-6 space-y-8">
+        {/* Protection Info Banner */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <div className="flex items-start space-x-2">
+            <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+            <div className="text-xs text-blue-600 dark:text-blue-400">
+              <p className="font-medium mb-1">🛡️ Protezione dati attiva</p>
+              <p>Le tue modifiche sono protette automaticamente. Se tenti di chiudere o navigare con modifiche non salvate, ti verrà chiesto di confermare.</p>
+              <p className="mt-1">
+                <strong>Tip:</strong> Usa <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Ctrl+S</kbd> (o <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Cmd+S</kbd> su Mac) per salvare rapidamente
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* User Info Section */}
         <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
@@ -377,6 +478,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </button>
         </div>
       </div>
+      </div>
     </Modal>
+
+    {/* Modale di conferma per modifiche non salvate */}
+    <UnsavedChangesModal
+      isOpen={showCloseConfirm}
+      onSaveAndExit={handleSaveAndClose}
+      onExitWithoutSaving={handleCloseWithoutSaving}
+      onCancel={handleCancelClose}
+      isSaving={isLoading || updatePreferencesMutation.isPending}
+      message="Le tue impostazioni sono state modificate. Vuoi salvarle prima di chiudere?"
+    />
+    </>
   );
 }

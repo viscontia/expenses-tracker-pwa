@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "~/trpc/react";
 import * as LucideIcons from "lucide-react";
+import { useUnsavedChangesGuard, UnsavedChangesModal } from "~/components/UnsavedChangesGuard";
 
 export const Route = createFileRoute("/_authenticated/categories/")({
   component: Categories,
@@ -83,6 +84,113 @@ function Categories() {
     setIconSearch("");
     setIsIconModalOpen(false);
   };
+
+  // Initial form data for comparison (to detect changes)
+  const initialFormData = useMemo(() => {
+    if (editingCategory) {
+      return {
+        name: editingCategory.name,
+        description: editingCategory.description || "",
+        icon: editingCategory.icon
+      };
+    }
+    return { name: "", description: "", icon: "ShoppingCart" };
+  }, [editingCategory]);
+
+  // Memoized current form data for unsaved changes detection
+  const memoizedFormData = useMemo(() => formData, [formData]);
+
+  // Handle save function for unsaved changes guard
+  const handleSave = async (): Promise<void> => {
+    if (!formData.name.trim()) {
+      throw new Error('Il nome della categoria è obbligatorio');
+    }
+
+    if (editingCategory) {
+      await updateMutation.mutateAsync({
+        id: editingCategory.id,
+        ...formData,
+      });
+    } else {
+      await createMutation.mutateAsync(formData);
+    }
+  };
+
+  // Unsaved changes guard (for form protection)
+  const {
+    hasUnsavedChanges,
+    resetChanges
+  } = useUnsavedChangesGuard({
+    formData: memoizedFormData,
+    onSave: handleSave,
+    isSaving: createMutation.isPending || updateMutation.isPending,
+    disabled: !isModalOpen || isIconModalOpen, // Only active when main modal is open (not icon modal)
+    message: "Hai modificato i dati della categoria. Vuoi salvarli prima di chiudere?"
+  });
+
+  // Local state for modal close confirmation
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Handle modal close with unsaved changes check
+  const handleCloseModal = () => {
+    if (hasUnsavedChanges) {
+      setShowCloseConfirm(true);
+    } else {
+      setIsModalOpen(false);
+      resetForm();
+    }
+  };
+
+  // Handle save and close
+  const handleSaveAndClose = async () => {
+    try {
+      await handleSave();
+      resetChanges();
+      setShowCloseConfirm(false);
+      setIsModalOpen(false);
+      resetForm();
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
+
+  // Handle close without saving
+  const handleCloseWithoutSaving = () => {
+    setShowCloseConfirm(false);
+    setIsModalOpen(false);
+    resetForm();
+  };
+
+  // Cancel close action
+  const handleCancelClose = () => {
+    setShowCloseConfirm(false);
+  };
+
+  // Reset changes tracking when modal opens with data loaded
+  useEffect(() => {
+    if (isModalOpen && !isIconModalOpen) {
+      // Reset the changes detection when modal is opened with fresh data
+      setTimeout(() => resetChanges(), 100);
+    }
+  }, [isModalOpen, isIconModalOpen, editingCategory, resetChanges]);
+
+  // Supporto per Ctrl+S / Cmd+S per salvare
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasUnsavedChanges && isModalOpen && !isIconModalOpen) {
+          handleSubmit(e as any);
+        }
+      }
+    };
+
+    if (isModalOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hasUnsavedChanges, isModalOpen, isIconModalOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,10 +304,34 @@ function Categories() {
       {/* Modal Principale */}
       {isModalOpen && !isIconModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md relative">
+            {/* Indicatore visivo delle modifiche non salvate */}
+            {hasUnsavedChanges && (
+              <div className="absolute top-4 right-4 z-10">
+                <div className="flex items-center space-x-2 bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-medium border border-amber-200 dark:border-amber-800 shadow-sm">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                  <span>Modifiche non salvate</span>
+                </div>
+              </div>
+            )}
+            
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {editingCategory ? "Modifica Categoria" : "Nuova Categoria"}
             </h2>
+
+            {/* Protection Info Banner */}
+            <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                <div className="text-xs text-blue-600 dark:text-blue-400">
+                  <p className="font-medium mb-1">🛡️ Protezione dati attiva</p>
+                  <p>Le tue modifiche sono protette automaticamente. Se tenti di chiudere con modifiche non salvate, ti verrà chiesto di confermare.</p>
+                  <p className="mt-1">
+                    <strong>Tip:</strong> Usa <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Ctrl+S</kbd> per salvare rapidamente
+                  </p>
+                </div>
+              </div>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -267,10 +399,7 @@ function Categories() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    resetForm();
-                  }}
+                  onClick={handleCloseModal}
                   className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400"
                 >
                   Annulla
@@ -361,6 +490,16 @@ function Categories() {
           </div>
         </div>
       )}
+
+      {/* Modale di conferma per modifiche non salvate */}
+      <UnsavedChangesModal
+        isOpen={showCloseConfirm}
+        onSaveAndExit={handleSaveAndClose}
+        onExitWithoutSaving={handleCloseWithoutSaving}
+        onCancel={handleCancelClose}
+        isSaving={createMutation.isPending || updateMutation.isPending}
+        message="Hai modificato i dati della categoria. Vuoi salvarli prima di chiudere?"
+      />
     </div>
   );
 }

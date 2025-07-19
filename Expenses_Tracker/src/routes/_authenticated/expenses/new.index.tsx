@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { trpc } from '~/trpc/react';
 import { 
   DollarSign, 
@@ -11,6 +11,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
+import { useUnsavedChangesGuard, UnsavedChangesModal } from '~/components/UnsavedChangesGuard';
 
 export const Route = createFileRoute('/_authenticated/expenses/new/')({
   component: NewExpense,
@@ -148,6 +149,93 @@ function NewExpense() {
     }
   };
 
+  // Memoized form data for unsaved changes detection
+  const memoizedFormData = useMemo(() => formData, [formData]);
+
+  // Handle save function for unsaved changes guard
+  const handleSave = async (): Promise<void> => {
+    if (!validateForm()) {
+      throw new Error('Il form contiene errori di validazione');
+    }
+
+    if (!token) {
+      throw new Error('Token di autenticazione mancante');
+    }
+
+    const conversionRate = formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1);
+    
+    await createExpenseMutation.mutateAsync({
+      categoryId: parseInt(formData.categoryId),
+      amount: parseFloat(formData.amount),
+      currency: formData.currency as 'ZAR' | 'EUR',
+      conversionRate,
+      date: new Date(formData.date).toISOString(),
+      description: formData.description || undefined,
+    });
+  };
+
+  // Unsaved changes guard (for navigation protection)
+  const {
+    hasUnsavedChanges,
+    resetChanges
+  } = useUnsavedChangesGuard({
+    formData: memoizedFormData,
+    onSave: handleSave,
+    isSaving: isSubmitting,
+    disabled: isSubmitted, // Disable when form is already submitted
+    message: "Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?"
+  });
+
+  // Local state for navigation confirmation
+  const [showNavigationConfirm, setShowNavigationConfirm] = useState(false);
+
+  // Handle back navigation with unsaved changes check
+  const handleBackNavigation = () => {
+    if (hasUnsavedChanges) {
+      setShowNavigationConfirm(true);
+    } else {
+      navigate({ to: '/dashboard' });
+    }
+  };
+
+  // Handle save and navigate
+  const handleSaveAndNavigate = async () => {
+    try {
+      await handleSave();
+      resetChanges();
+      setShowNavigationConfirm(false);
+      navigate({ to: '/dashboard' });
+    } catch (error) {
+      // Error already handled by mutation
+    }
+  };
+
+  // Handle navigate without saving
+  const handleNavigateWithoutSaving = () => {
+    setShowNavigationConfirm(false);
+    navigate({ to: '/dashboard' });
+  };
+
+  // Cancel navigation
+  const handleCancelNavigation = () => {
+    setShowNavigationConfirm(false);
+  };
+
+  // Supporto per Ctrl+S / Cmd+S per salvare
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasUnsavedChanges && !isSubmitting) {
+          handleSubmit(e as any);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hasUnsavedChanges, isSubmitting]);
+
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -181,16 +269,27 @@ function NewExpense() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center mb-8">
-          <button
-            onClick={() => navigate({ to: '/dashboard' })}
-            className="mr-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </button>
+    <>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center mb-8 relative">
+            <button
+              onClick={handleBackNavigation}
+              className="mr-4 p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-6 w-6" />
+                        </button>
+            
+            {/* Indicatore visivo delle modifiche non salvate */}
+            {hasUnsavedChanges && (
+              <div className="absolute right-0 top-0">
+                <div className="flex items-center space-x-2 bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-xs font-medium border border-amber-200 dark:border-amber-800 shadow-sm">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                  <span>Modifiche non salvate</span>
+                </div>
+              </div>
+            )}
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Nuova Spesa
@@ -198,6 +297,20 @@ function NewExpense() {
             <p className="text-gray-600 dark:text-gray-400 mt-1">
               Registra una nuova spesa nel tuo budget
             </p>
+          </div>
+        </div>
+
+        {/* Protection Info Banner */}
+        <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <div className="flex items-start space-x-2">
+            <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+            <div className="text-xs text-blue-600 dark:text-blue-400">
+              <p className="font-medium mb-1">🛡️ Protezione dati attiva</p>
+              <p>I tuoi dati sono protetti automaticamente. Se tenti di uscire con modifiche non salvate, ti verrà chiesto di confermare.</p>
+              <p className="mt-1">
+                <strong>Tip:</strong> Usa <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Ctrl+S</kbd> (o <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Cmd+S</kbd> su Mac) per salvare rapidamente
+              </p>
+            </div>
           </div>
         </div>
 
@@ -359,5 +472,16 @@ function NewExpense() {
         )}
       </div>
     </div>
+
+    {/* Modale di conferma per modifiche non salvate */}
+    <UnsavedChangesModal
+      isOpen={showNavigationConfirm}
+      onSaveAndExit={handleSaveAndNavigate}
+      onExitWithoutSaving={handleNavigateWithoutSaving}
+      onCancel={handleCancelNavigation}
+      isSaving={isSubmitting}
+      message="Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?"
+    />
+    </>
   );
 }
