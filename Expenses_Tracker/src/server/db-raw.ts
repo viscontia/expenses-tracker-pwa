@@ -337,6 +337,51 @@ export class RawExpensesDB {
     return result[0] || null;
   }
 
+  static async getExpenseByIdWithCategory(expenseId: number, userId: number) {
+    const query = `
+      SELECT 
+        e.id,
+        e.amount,
+        e.currency,
+        e.date,
+        e.description,
+        e."userId",
+        e."categoryId",
+        e."conversionRate",
+        c.id as "category_id",
+        c.name as "category_name",
+        c.description as "category_description",
+        c.icon as "category_icon"
+      FROM expenses e
+      JOIN categories c ON e."categoryId" = c.id
+      WHERE e.id = $1 AND e."userId" = $2
+    `;
+    
+    const result = await queryRaw(query, [expenseId, userId]);
+    
+    if (!result[0]) {
+      return null;
+    }
+    
+    const row = result[0];
+    return {
+      id: row.id,
+      amount: row.amount,
+      currency: row.currency,
+      date: row.date,
+      description: row.description,
+      userId: row.userId,
+      categoryId: row.categoryId,
+      conversionRate: row.conversionRate,
+      category: {
+        id: row.category_id,
+        name: row.category_name,
+        description: row.category_description,
+        icon: row.category_icon
+      }
+    };
+  }
+
   static async updateExpense(
     expenseId: number,
     userId: number,

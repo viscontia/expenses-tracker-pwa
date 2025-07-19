@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { ExpenseForm } from './ExpenseForm';
+import { ExpenseForm } from '~/components/ExpenseForm';
 
 export const Route = createFileRoute('/_authenticated/expenses/edit/$id')({
   component: EditExpense,

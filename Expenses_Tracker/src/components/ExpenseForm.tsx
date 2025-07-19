@@ -53,17 +53,13 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     { enabled: !!token }
   );
 
-  // Get existing expense data for edit mode
-  // Note: This is a temporary workaround - loads recent expenses and filters by ID
-  const { data: existingExpense, isLoading: expenseLoading } = trpc.expenses.getExpenses.useQuery(
+  // Get existing expense data for edit mode - optimized with dedicated query
+  const { data: existingExpense, isLoading: expenseLoading, error: expenseError } = trpc.expenses.getExpenseById.useQuery(
+    { id: expenseId as number },
     { 
-      limit: 100, // Increased limit to find the expense
-      offset: 0 
-    },
-    { 
-      enabled: mode === 'update' && !!expenseId,
-      select: (data) => data.expenses.find(exp => exp.id === expenseId),
-      staleTime: 30 * 1000, // Cache for 30 seconds
+      enabled: mode === 'update' && !!expenseId && typeof expenseId === 'number',
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      retry: 1,
     }
   );
 
@@ -169,7 +165,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
         currency: existingExpense.currency,
         categoryId: existingExpense.categoryId.toString(),
         date: new Date(existingExpense.date).toISOString().split('T')[0],
-        description: existingExpense.description || '',
+        description: (existingExpense.description || '') as string,
       });
     }
   }, [mode, existingExpense]);
@@ -368,10 +364,17 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
   };
 
   // Unsaved changes guard
-  const { showUnsavedModal, setShowUnsavedModal, hasUnsavedChanges } = useUnsavedChangesGuard({
+  const { 
+    hasUnsavedChanges, 
+    isModalOpen, 
+    confirmNavigation, 
+    cancelNavigation, 
+    saveAndNavigate 
+  } = useUnsavedChangesGuard({
     formData: memoizedFormData,
     onSave: handleSave,
-    enabled: true,
+    isSaving: isSubmitting,
+    disabled: isSubmitted,
     message: mode === 'insert' ? 
       "Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?" :
       "Hai modificato questa spesa. Vuoi salvare le modifiche prima di uscire?"
@@ -703,20 +706,16 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
 
         {/* Modale di conferma per modifiche non salvate */}
         <UnsavedChangesModal
-          isOpen={showUnsavedModal}
-          onClose={() => setShowUnsavedModal(false)}
-          onSave={handleSave}
-          onDiscard={() => {
-            setShowUnsavedModal(false);
-            navigate({ to: '/expenses' });
-          }}
-          title={mode === 'insert' ? "Modifiche non salvate" : "Modifiche non salvate"}
+          isOpen={isModalOpen}
+          onSaveAndExit={saveAndNavigate}
+          onExitWithoutSaving={confirmNavigation}
+          onCancel={cancelNavigation}
+          isSaving={isSubmitting}
           message={mode === 'insert' ? 
             "Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?" :
             "Hai modificato questa spesa. Vuoi salvare le modifiche prima di uscire?"
           }
-          saveLabel={mode === 'insert' ? "Salva Spesa" : "Salva Modifiche"}
-          discardLabel="Esci senza salvare"
+          showSaveButton={true}
         />
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { createTRPCRouter } from "~/server/trpc/main";
 import { 
   getExpenses, 
+  getExpenseById,
   createExpense, 
   updateExpense, 
   deleteExpense
@@ -8,6 +9,7 @@ import {
 
 export const expensesRouter = createTRPCRouter({
   getExpenses,
+  getExpenseById,
   createExpense,
   updateExpense,
   deleteExpense,

@@ -27,6 +27,10 @@ const deleteExpenseSchema = z.object({
   id: z.number(),
 });
 
+const getExpenseByIdSchema = z.object({
+  id: z.number(),
+});
+
 const getExpensesSchema = z.object({
   categoryIds: z.array(z.number()).optional(),
   startDate: z.string().datetime().optional(),
@@ -68,6 +72,23 @@ export const getExpenses = protectedProcedure
       total,
       hasMore: total > input.offset + input.limit,
     };
+  });
+
+export const getExpenseById = protectedProcedure
+  .input(getExpenseByIdSchema)
+  .query(async ({ ctx, input }) => {
+    const userId = ctx.user.id;
+    
+    const expense = await RawExpensesDB.getExpenseByIdWithCategory(input.id, userId);
+    
+    if (!expense) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Spesa non trovata'
+      });
+    }
+    
+    return expense;
   });
 
 export const createExpense = protectedProcedure

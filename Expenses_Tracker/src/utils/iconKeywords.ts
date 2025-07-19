@@ -572,16 +572,6 @@ export const iconKeywords: Record<string, IconMetadata> = {
   },
 
   // 🏭 Business & Work
-  "Briefcase": {
-    name: "Briefcase",
-    keywords: ["briefcase", "work", "business", "job", "valigetta", "lavoro", "business"],
-    category: "business"
-  },
-  "Building": {
-    name: "Building",
-    keywords: ["building", "office", "company", "business", "edificio", "ufficio", "azienda"],
-    category: "business"
-  },
   "Building2": {
     name: "Building2",
     keywords: ["building", "office", "company", "business", "edificio", "ufficio", "azienda"],
@@ -695,11 +685,6 @@ export const iconKeywords: Record<string, IconMetadata> = {
   },
 
   // 🔧 System & Settings
-  "Settings": {
-    name: "Settings",
-    keywords: ["settings", "configuration", "options", "preferences", "impostazioni", "configurazione", "opzioni"],
-    category: "system"
-  },
   "Cog": {
     name: "Cog",
     keywords: ["cog", "settings", "gear", "configuration", "ingranaggio", "impostazioni", "configurazione"],
@@ -764,11 +749,6 @@ export const iconKeywords: Record<string, IconMetadata> = {
   },
 
   // 🎨 Design & Creative
-  "Palette": {
-    name: "Palette",
-    keywords: ["palette", "colors", "art", "design", "paint", "tavolozza", "colori", "arte", "design"],
-    category: "design"
-  },
   "Paintbrush": {
     name: "Paintbrush",
     keywords: ["paintbrush", "paint", "art", "design", "brush", "pennello", "pittura", "arte"],
