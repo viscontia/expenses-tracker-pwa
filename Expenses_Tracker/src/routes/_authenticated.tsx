@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createFileRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { useAuthStore } from '~/stores/auth';
 import { Layout } from '~/components/Layout';
+import { useExchangeRateUpdater } from '~/hooks/useExchangeRateUpdater';
 
 export const Route = createFileRoute('/_authenticated')({
   component: AuthenticatedLayout,
@@ -10,6 +11,23 @@ export const Route = createFileRoute('/_authenticated')({
 function AuthenticatedLayout() {
   const { isAuthenticated, isLoading } = useAuthStore();
   const navigate = useNavigate();
+
+  // Aggiornamento automatico tassi di cambio in background
+  // Si attiva solo quando l'utente è autenticato e non in loading
+  useExchangeRateUpdater({
+    enabled: isAuthenticated && !isLoading,
+    delayMs: 3000, // 3 secondi dopo l'autenticazione
+    onUpdateSuccess: (result) => {
+      // Log silenzioso per monitoraggio - non mostra notifiche all'utente
+      if (!result.skipped) {
+        console.log(`✅ Exchange rates refreshed: ${result.updatedRates} rates updated`);
+      }
+    },
+    onUpdateError: (error) => {
+      // Log errore ma non disturba l'utente - l'app continua a funzionare
+      console.warn('⚠️ Background exchange rate update failed:', error);
+    }
+  });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

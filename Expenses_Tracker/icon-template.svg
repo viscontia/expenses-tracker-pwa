@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="76" fill="url(#bg)"/>
+  
+  <!-- Dollar symbol -->
+  <g fill="white" stroke="white" stroke-width="24" stroke-linecap="round">
+    <!-- Vertical line -->
+    <line x1="256" y1="136" x2="256" y2="376"/>
+    
+    <!-- Top curve -->
+    <path d="M 196 180 Q 196 140 236 140 Q 316 140 316 180 Q 316 220 256 220" fill="none"/>
+    
+    <!-- Bottom curve -->
+    <path d="M 256 292 Q 316 292 316 332 Q 316 372 276 372 Q 196 372 196 332 Q 196 292 256 292" fill="none"/>
+  </g>
+  
+  <!-- Small chart -->
+  <g fill="white" opacity="0.7">
+    <rect x="380" y="380" width="12" height="40"/>
+    <rect x="396" y="360" width="12" height="60"/>
+    <rect x="412" y="375" width="12" height="45"/>
+  </g>
+</svg> 

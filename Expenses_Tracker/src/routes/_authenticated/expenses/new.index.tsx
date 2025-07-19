@@ -14,6 +14,7 @@ import {
 import * as LucideIcons from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
 import { useUnsavedChangesGuard, UnsavedChangesModal } from '~/components/UnsavedChangesGuard';
+import { usePreSubmitExchangeUpdate } from '~/hooks/usePreSubmitExchangeUpdate';
 
 export const Route = createFileRoute('/_authenticated/expenses/new/')({
   component: NewExpense,
@@ -97,6 +98,23 @@ function NewExpense() {
   // Trova la categoria selezionata
   const selectedCategory = categories?.find(cat => cat.id.toString() === formData.categoryId);
 
+  // Hook per aggiornamento pre-submit delle valute
+  const { ensureFreshRates, isProcessing: isUpdatingRates, status: ratesStatus } = usePreSubmitExchangeUpdate({
+    enabled: true,
+    timeoutMs: 5000, // 5 secondi timeout
+    onUpdateStart: () => {
+      console.log('💱 [NewExpense] Starting exchange rate update before submission...');
+    },
+    onUpdateComplete: (success, result) => {
+      if (success && result && !result.skipped) {
+        console.log(`💱 [NewExpense] Exchange rates updated successfully: ${result.updatedRates} rates`);
+      }
+    },
+    onUpdateError: (error) => {
+      console.warn('💱 [NewExpense] Exchange rate update failed, but proceeding with submission:', error);
+    }
+  });
+
   // Aggiorna la valuta predefinita quando l'utente e le sue preferenze sono disponibili
   useEffect(() => {
     const safeCurrency = String(defaultCurrency || 'EUR');
@@ -159,6 +177,18 @@ function NewExpense() {
     setIsSubmitting(true);
 
     try {
+      // ✅ FASE 2: Aggiornamento pre-submit delle valute
+      console.log('💱 [NewExpense] Ensuring fresh exchange rates before expense submission...');
+      const ratesResult = await ensureFreshRates();
+      
+      if (ratesResult.updated) {
+        console.log('✅ [NewExpense] Exchange rates refreshed successfully before submission');
+      } else if (ratesResult.timedOut) {
+        console.warn('⚠️ [NewExpense] Exchange rate update timed out, proceeding with existing rates');
+      } else if (!ratesResult.success) {
+        console.warn('⚠️ [NewExpense] Exchange rate update failed, proceeding with existing rates');
+      }
+
       const conversionRate = formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1);
       
       await createExpenseMutation.mutateAsync({
@@ -171,6 +201,7 @@ function NewExpense() {
       });
     } catch (err) {
       // Error handled in onError callback
+      setIsSubmitting(false);
     }
   };
 
@@ -192,6 +223,18 @@ function NewExpense() {
 
     if (!token) {
       throw new Error('Token di autenticazione mancante');
+    }
+
+    // ✅ FASE 2: Aggiornamento pre-submit delle valute per unsaved changes guard
+    console.log('💱 [NewExpense] Ensuring fresh exchange rates before saving (unsaved changes guard)...');
+    const ratesResult = await ensureFreshRates();
+    
+    if (ratesResult.updated) {
+      console.log('✅ [NewExpense] Exchange rates refreshed successfully before saving');
+    } else if (ratesResult.timedOut) {
+      console.warn('⚠️ [NewExpense] Exchange rate update timed out, proceeding with existing rates');
+    } else if (!ratesResult.success) {
+      console.warn('⚠️ [NewExpense] Exchange rate update failed, proceeding with existing rates');
     }
 
     const conversionRate = formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1);
@@ -268,6 +311,13 @@ function NewExpense() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hasUnsavedChanges, isSubmitting]);
 
+  // Cleanup dell'hook valute al unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup automatico gestito dall'hook stesso
+    };
+  }, []);
+
   if (isSubmitted) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -337,8 +387,8 @@ function NewExpense() {
           <div className="flex items-start space-x-2">
             <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
             <div className="text-xs text-blue-600 dark:text-blue-400">
-              <p className="font-medium mb-1">🛡️ Protezione dati attiva</p>
-              <p>I tuoi dati sono protetti automaticamente. Se tenti di uscire con modifiche non salvate, ti verrà chiesto di confermare.</p>
+              <p className="font-medium mb-1">🛡️ Protezione dati attiva + 💱 Tassi sempre freschi</p>
+              <p>I tuoi dati sono protetti automaticamente. Prima di salvare ogni spesa, aggiorniamo i tassi di cambio per garantire precisione.</p>
               <p className="mt-1">
                 <strong>Tip:</strong> Usa <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Ctrl+S</kbd> (o <kbd className="px-1 py-0.5 bg-blue-200 dark:bg-blue-800 rounded">Cmd+S</kbd> su Mac) per salvare rapidamente
               </p>
@@ -510,6 +560,19 @@ function NewExpense() {
               </p>
             </div>
 
+            {/* Exchange Rate Update Status */}
+            {isUpdatingRates && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+                  <div className="text-sm text-blue-600 dark:text-blue-400">
+                    <p className="font-medium">💱 Aggiornamento tassi di cambio in corso...</p>
+                    <p className="text-xs mt-1">Stiamo assicurando che i tassi siano aggiornati per la tua spesa</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Submit Button */}
             <div className="flex flex-col sm:flex-row gap-4 pt-6">
               <button
@@ -521,13 +584,13 @@ function NewExpense() {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isUpdatingRates}
                 className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Salvando...
+                    {isUpdatingRates ? 'Aggiornando valute...' : 'Salvando...'}
                   </>
                 ) : (
                   'Salva Spesa'

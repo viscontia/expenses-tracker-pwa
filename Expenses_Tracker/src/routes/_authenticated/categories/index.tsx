@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { trpc } from "~/trpc/react";
 import * as LucideIcons from "lucide-react";
 import { useUnsavedChangesGuard, UnsavedChangesModal } from "~/components/UnsavedChangesGuard";
+import { searchIcons, getIconKeywords, getIconCategory } from "~/utils/iconKeywords";
 
 export const Route = createFileRoute("/_authenticated/categories/")({
   component: Categories,
@@ -227,10 +228,10 @@ function Categories() {
     return IconComponent || (LucideIcons as any).ShoppingCart;
   };
 
-  // Filtra le icone in base alla ricerca
-  const filteredIcons = availableIcons.filter((iconName) =>
-    iconName.toLowerCase().includes(iconSearch.toLowerCase())
-  );
+  // Filtra le icone in base alla ricerca semantica
+  const filteredIcons = useMemo(() => {
+    return searchIcons(availableIcons, iconSearch);
+  }, [availableIcons, iconSearch]);
 
   if (isLoading) {
     return (
@@ -427,17 +428,26 @@ function Categories() {
             <div className="mb-4">
               <input
                 type="text"
-                placeholder="Cerca icona (es: home, car, food)..."
+                placeholder="Cerca icona (es: trolley, shopping, food, casa, macchina)..."
                 value={iconSearch}
                 onChange={(e) => setIconSearch(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black placeholder-gray-400"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                💡 <strong>Suggerimento:</strong> Puoi cercare per nome tecnico (es: "ShoppingCart") o per keywords semantiche (es: "trolley", "carrello", "spesa")
+              </p>
             </div>
             
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-6 gap-4">
                 {filteredIcons.map((iconName) => {
                   const IconComponent = (LucideIcons as any)[iconName];
+                  const keywords = getIconKeywords(iconName);
+                  const category = getIconCategory(iconName);
+                  const tooltipText = keywords.length > 0 
+                    ? `${iconName}\nKeywords: ${keywords.slice(0, 5).join(", ")}${keywords.length > 5 ? "..." : ""}\nCategoria: ${category}`
+                    : iconName;
+                  
                   return (
                     <button
                       key={iconName}
@@ -452,7 +462,7 @@ function Categories() {
                           ? "border-blue-500 bg-blue-50"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
-                      title={iconName}
+                      title={tooltipText}
                     >
                       <IconComponent 
                         size={28} 
@@ -462,8 +472,11 @@ function Categories() {
                             : "text-gray-700 hover:text-gray-900"
                         }`}
                       />
-                      <span className="text-xs text-center break-words text-gray-700 font-medium leading-tight px-1 overflow-hidden max-h-8">
+                      <span className="text-xs text-center break-words text-gray-700 font-medium leading-tight px-1 overflow-hidden max-h-8 relative">
                         {iconName}
+                        {keywords.length > 0 && (
+                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full" title="Ha keywords di ricerca"></span>
+                        )}
                       </span>
                     </button>
                   );
@@ -479,6 +492,11 @@ function Categories() {
             <div className="mt-4 flex justify-between items-center">
               <div className="text-sm text-gray-500">
                 {filteredIcons.length} icone trovate su {availableIcons.length} totali
+                {iconSearch && (
+                  <span className="ml-2 text-blue-600">
+                    • Ricerca semantica attiva 🔍
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setIsIconModalOpen(false)}
