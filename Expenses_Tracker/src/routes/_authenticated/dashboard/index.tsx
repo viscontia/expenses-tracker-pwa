@@ -64,6 +64,8 @@ function InlineCacheMetrics() {
 function Dashboard() {
   console.log('🏠 Dashboard component rendering at:', new Date().toISOString());
   
+
+  
   // State per i combobox della dashboard - VALORI FISSI per evitare re-render
   const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
   const [categoriesLimit, setCategoriesLimit] = useState<number>(10);
@@ -151,6 +153,7 @@ function Dashboard() {
   // Query hooks - SOLO per ottenere le funzioni refetch
   const { refetch: refetchCurrencies } = trpc.currency.getAvailableCurrencies.useQuery(undefined, queryOptions);
   const { refetch: refetchExchangeUpdate } = trpc.currency.getLastExchangeRateUpdate.useQuery(undefined, queryOptions);
+  const { refetch: refetchCacheMetrics } = trpc.currency.getCacheMetrics.useQuery(undefined, queryOptions);
   const { refetch: refetchKpis } = trpc.dashboard.getKpis.useQuery(kpisParams, queryOptions);
   const { refetch: refetchChartData } = trpc.dashboard.getChartData.useQuery(chartDataParams, queryOptions);
   const { refetch: refetchRecentExpenses } = trpc.dashboard.getRecentExpenses.useQuery(recentExpensesParams, queryOptions);
@@ -527,6 +530,8 @@ function Dashboard() {
           <ExchangeRateStatusIndicator position="dashboard" />
         </div>
       </div>
+
+
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

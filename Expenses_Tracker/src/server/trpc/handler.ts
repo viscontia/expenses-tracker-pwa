@@ -41,7 +41,7 @@ export default defineEventHandler((event) => {
   }
 
   return fetchRequestHandler({
-    endpoint: "/trpc",
+    endpoint: "/api/trpc",
     req: request,
     router: appRouter,
     createContext,

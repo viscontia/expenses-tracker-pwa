@@ -69,7 +69,7 @@ export class RawCurrencyDB {
   static async getLastExchangeRateUpdate(): Promise<{ date: string } | null> {
     const query = `
       SELECT date 
-      FROM "ExchangeRate" 
+      FROM "exchange_rates" 
       ORDER BY date DESC 
       LIMIT 1
     `;
@@ -78,12 +78,26 @@ export class RawCurrencyDB {
   }
 
   /**
+   * Debug: Ottiene informazioni dettagliate sui timestamp di tutti i record
+   */
+  static async debugTimestamps(): Promise<Array<{fromCurrency: string, toCurrency: string, date: string, count: number}>> {
+    const query = `
+      SELECT "fromCurrency", "toCurrency", date, COUNT(*) as count
+      FROM "exchange_rates" 
+      GROUP BY "fromCurrency", "toCurrency", date
+      ORDER BY date DESC, "fromCurrency", "toCurrency"
+      LIMIT 50
+    `;
+    return await queryRaw<{fromCurrency: string, toCurrency: string, date: string, count: number}>(query, []);
+  }
+
+  /**
    * Ottiene tutte le valute disponibili
    */
   static async getAvailableCurrencies(): Promise<Array<{ fromCurrency: string; toCurrency: string }>> {
     const query = `
       SELECT DISTINCT "fromCurrency", "toCurrency"
-      FROM "ExchangeRate"
+      FROM "exchange_rates"
       ORDER BY "fromCurrency", "toCurrency"
     `;
     return await queryRaw<{ fromCurrency: string; toCurrency: string }>(query, []);
@@ -95,7 +109,7 @@ export class RawCurrencyDB {
   static async checkExistingRatesForDate(date: Date): Promise<boolean> {
     const query = `
       SELECT 1 
-      FROM "ExchangeRate" 
+      FROM "exchange_rates" 
       WHERE date >= $1 AND date < $2
       LIMIT 1
     `;
@@ -108,13 +122,58 @@ export class RawCurrencyDB {
    * Inserisce o aggiorna un tasso di cambio
    */
   static async upsertExchangeRate(fromCurrency: string, toCurrency: string, rate: number, date: Date): Promise<void> {
-    const query = `
-      INSERT INTO "ExchangeRate" ("fromCurrency", "toCurrency", rate, date) 
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT ("fromCurrency", "toCurrency", date) 
-      DO UPDATE SET rate = EXCLUDED.rate
+    // Prima elimina eventuali record esistenti per questa coppia di valute
+    const deleteQuery = `
+      DELETE FROM "exchange_rates" 
+      WHERE "fromCurrency" = $1 AND "toCurrency" = $2
     `;
-    await queryRaw(query, [fromCurrency, toCurrency, rate, date.toISOString()]);
+    await queryRaw(deleteQuery, [fromCurrency, toCurrency]);
+    
+    // Poi inserisci il nuovo record con data aggiornata
+    const insertQuery = `
+      INSERT INTO "exchange_rates" ("fromCurrency", "toCurrency", rate, date) 
+      VALUES ($1, $2, $3, $4)
+    `;
+    await queryRaw(insertQuery, [fromCurrency, toCurrency, rate, date.toISOString()]);
+  }
+
+  /**
+   * Elimina tutti i tassi di cambio esistenti (per Force Update)
+   */
+  static async clearAllExchangeRates(): Promise<void> {
+    const query = `DELETE FROM "exchange_rates"`;
+    await queryRaw(query, []);
+    console.log('🧹 All exchange rates cleared from database');
+  }
+
+  /**
+   * Inserisce in batch tutti i tassi di cambio con lo stesso timestamp
+   */
+  static async batchInsertExchangeRates(
+    rates: Array<{from: string, to: string, rate: number}>, 
+    timestamp: Date
+  ): Promise<void> {
+    if (rates.length === 0) return;
+    
+    console.log(`💾 Batch inserting ${rates.length} rates with unified timestamp: ${timestamp.toISOString()}`);
+    
+    const values = rates.map((_, index) => {
+      const base = index * 4;
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
+    }).join(', ');
+    
+    const query = `
+      INSERT INTO "exchange_rates" ("fromCurrency", "toCurrency", rate, date) 
+      VALUES ${values}
+    `;
+    
+    const params: any[] = [];
+    for (const rate of rates) {
+      params.push(rate.from, rate.to, rate.rate, timestamp.toISOString());
+    }
+    
+    await queryRaw(query, params);
+    console.log(`✅ Successfully inserted ${rates.length} rates with timestamp ${timestamp.toISOString()}`);
   }
 }
 

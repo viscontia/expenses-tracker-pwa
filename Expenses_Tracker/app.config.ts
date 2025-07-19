@@ -33,7 +33,7 @@ export default createApp({
 		{
 			type: 'http',
 			name: 'trpc',
-			base: '/trpc',
+			base: '/api/trpc',
 			handler: './src/server/trpc/handler.ts',
 			target: 'server',
 			plugins: () => [

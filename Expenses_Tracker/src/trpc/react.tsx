@@ -35,7 +35,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           condition: (op) => op.type === 'subscription',
           false: httpBatchStreamLink({
             transformer: SuperJSON,
-            url: getBaseUrl() + '/trpc',
+            url: getBaseUrl() + '/api/trpc',
             headers() {
               const { token } = useAuthStore.getState();
               if (!token) {
@@ -48,7 +48,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           }),
           true: httpSubscriptionLink({
             transformer: SuperJSON,
-            url: getBaseUrl() + '/trpc',
+            url: getBaseUrl() + '/api/trpc',
           }),
         }),
       ],

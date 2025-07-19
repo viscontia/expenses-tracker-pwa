@@ -10,7 +10,7 @@ function getBaseUrl() {
 export const client = createTRPCProxyClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: getBaseUrl() + '/trpc',
+      url: getBaseUrl() + '/api/trpc',
       transformer: SuperJSON,
       headers() {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;

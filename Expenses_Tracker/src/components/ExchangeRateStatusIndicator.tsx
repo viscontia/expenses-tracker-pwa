@@ -141,7 +141,7 @@ export function ExchangeRateStatusIndicator({
       icon: CheckCircle,
       color: 'text-green-500',
       bgColor: 'bg-green-100 dark:bg-green-900/20',
-      label: 'Aggiornate'
+      label: 'Aggiornati'
     };
   };
 
@@ -150,15 +150,15 @@ export function ExchangeRateStatusIndicator({
 
   // Formato data per tooltip
   const formatLastUpdate = () => {
-    if (!status.lastUpdate) return 'Mai aggiornate';
+    if (!status.lastUpdate) return 'Mai aggiornati';
     
     const now = new Date();
     const diffHours = Math.floor((now.getTime() - status.lastUpdate.getTime()) / (1000 * 60 * 60));
     
-    if (diffHours < 1) return 'Aggiornate da poco';
-    if (diffHours < 24) return `Aggiornate ${diffHours}h fa`;
+    if (diffHours < 1) return 'Da poco';
+    if (diffHours < 24) return `${diffHours}h fa`;
     
-    return `Aggiornate ${status.daysSinceUpdate} giorni fa`;
+    return `${status.daysSinceUpdate} giorni fa`;
   };
 
   // Rendering per posizione header (compatto)
@@ -180,24 +180,34 @@ export function ExchangeRateStatusIndicator({
 
         {/* Tooltip */}
         {showTooltip && (
-          <div className="absolute top-full left-0 mt-2 z-50 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3">
-            <div className="flex items-center space-x-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
-              <span className="font-medium text-gray-900 dark:text-white">Tassi di Cambio</span>
+          <div className="absolute top-full left-0 mt-2 z-50 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-xl p-5">
+            <div className="flex items-center space-x-3 mb-4">
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+              <span className="font-semibold text-gray-900 dark:text-white text-base">Tassi di Cambio</span>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-              <p><strong>Stato:</strong> {indicator.label}</p>
-              <p><strong>Ultimo aggiornamento:</strong> {formatLastUpdate()}</p>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-2 px-1">
+                <span className="text-gray-500 dark:text-gray-400 font-medium">Stato:</span>
+                <span className="text-gray-900 dark:text-white font-semibold">{indicator.label}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 px-1">
+                <span className="text-gray-500 dark:text-gray-400 font-medium">Aggiornato:</span>
+                <span className="text-gray-900 dark:text-white font-semibold">{formatLastUpdate()}</span>
+              </div>
               {cacheMetrics?.success && cacheMetrics.status && (
-                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    <strong>Cache:</strong> {cacheMetrics.status.size} entries, 
-                    {Math.round(cacheMetrics.status.hitRate * 100)}% hit rate
-                  </p>
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between py-2 px-1">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Cache:</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">
+                      {cacheMetrics.status.size} entries, {Math.round(cacheMetrics.status.hitRate * 100)}%
+                    </span>
+                  </div>
                 </div>
               )}
               {status.error && (
-                <p className="text-red-500 text-xs">{status.error}</p>
+                <div className="mt-4 pt-4 border-t border-red-200 dark:border-red-600">
+                  <p className="text-red-500 text-sm font-medium">{status.error}</p>
+                </div>
               )}
             </div>
           </div>
@@ -223,21 +233,21 @@ export function ExchangeRateStatusIndicator({
         </div>
 
         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-          <div className="flex justify-between">
-            <span>Ultimo aggiornamento:</span>
+          <div className="flex justify-between items-center">
+            <span>Aggiornamento:</span>
             <span className={status.needsUpdate ? 'text-amber-600 dark:text-amber-400' : ''}>
               {formatLastUpdate()}
             </span>
           </div>
           
           {status.lastUpdate && (
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Data:</span>
               <span>{status.lastUpdate.toLocaleDateString('it-IT')}</span>
             </div>
           )}
 
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span>Stato:</span>
             <span className={`${indicator.color} font-medium`}>
               {status.isHealthy ? 'Sano' : 'Richiede attenzione'}

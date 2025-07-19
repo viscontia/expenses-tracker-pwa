@@ -22,6 +22,7 @@ interface UseExchangeRateUpdaterOptions {
  * Esegue l'aggiornamento in background senza bloccare l'UI
  */
 export function useExchangeRateUpdater(options: UseExchangeRateUpdaterOptions = {}) {
+  // Expose force update function for manual triggering
   const {
     enabled = true,
     delayMs = 2000, // 2 secondi di delay predefinito
