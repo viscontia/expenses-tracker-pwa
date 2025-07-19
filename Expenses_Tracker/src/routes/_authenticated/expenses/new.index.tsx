@@ -52,19 +52,20 @@ function NewExpense() {
     { enabled: !!token }
   );
 
-  // Get exchange rates
-  const { data: exchangeRate } = trpc.currency.getExchangeRate.useQuery(
-    { fromCurrency: 'EUR', toCurrency: 'EUR' },
-    { enabled: false } // We'll enable this when needed for non-EUR currencies
-  );
+  // Stato iniziale per valuta (sarà aggiornato da formData)
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
 
   // Create expense mutation
   const createExpenseMutation = trpc.expenses.createExpense.useMutation({
     onSuccess: () => {
+      console.log('✅ [NewExpense] Expense saved successfully!');
       setIsSubmitted(true);
+      
+      // 🚀 RIDOTTO timeout da 2s a 500ms per responsiveness
       setTimeout(() => {
+        console.log('🔄 [NewExpense] Navigating to dashboard...');
         navigate({ to: '/dashboard' });
-      }, 2000);
+      }, 500);
     },
     onError: (error) => {
       setError(error.message);
@@ -98,6 +99,19 @@ function NewExpense() {
   // Trova la categoria selezionata
   const selectedCategory = categories?.find(cat => cat.id.toString() === formData.categoryId);
 
+  // Get exchange rates dinamicamente basato sulla valuta selezionata
+  const { data: exchangeRate, isLoading: exchangeRateLoading } = trpc.currency.getExchangeRate.useQuery(
+    { 
+      fromCurrency: 'EUR', 
+      toCurrency: selectedCurrency as 'ZAR' | 'EUR' | 'USD' | 'GBP' 
+    },
+    { 
+      enabled: selectedCurrency !== 'EUR', // Abilita solo per valute non-EUR
+      staleTime: 5 * 60 * 1000, // Cache per 5 minuti
+      retry: 2 // Retry massimo 2 volte
+    }
+  );
+
   // Hook per aggiornamento pre-submit delle valute
   const { ensureFreshRates, isProcessing: isUpdatingRates, status: ratesStatus } = usePreSubmitExchangeUpdate({
     enabled: true,
@@ -124,6 +138,11 @@ function NewExpense() {
       currency: safeCurrency
     }));
   }, [defaultCurrency]);
+
+  // Sincronizza selectedCurrency con formData.currency per la query exchange rate
+  useEffect(() => {
+    setSelectedCurrency(formData.currency);
+  }, [formData.currency]);
 
   // Chiudi dropdown quando si clicca fuori
   useEffect(() => {
@@ -177,20 +196,39 @@ function NewExpense() {
     setIsSubmitting(true);
 
     try {
-      // ✅ FASE 2: Aggiornamento pre-submit delle valute
-      console.log('💱 [NewExpense] Ensuring fresh exchange rates before expense submission...');
-      const ratesResult = await ensureFreshRates();
+      // 🚀 OTTIMIZZATO: Aggiornamento asincrono non bloccante
+      console.log('💱 [NewExpense] Starting non-blocking rate update and expense save...');
       
-      if (ratesResult.updated) {
-        console.log('✅ [NewExpense] Exchange rates refreshed successfully before submission');
-      } else if (ratesResult.timedOut) {
-        console.warn('⚠️ [NewExpense] Exchange rate update timed out, proceeding with existing rates');
-      } else if (!ratesResult.success) {
-        console.warn('⚠️ [NewExpense] Exchange rate update failed, proceeding with existing rates');
-      }
+      // Avvia aggiornamento in background SENZA attendere
+      const ratesPromise = ensureFreshRates().catch(error => {
+        console.warn('⚠️ [NewExpense] Background rate update failed:', error);
+        return { success: false, updated: false, timedOut: false };
+      });
 
-      const conversionRate = formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1);
-      
+             // Determina conversion rate con gestione intelligente
+       let conversionRate = 1; // Default per EUR
+       
+       if (formData.currency !== 'EUR') {
+         // Prova a usare il tasso corrente, se disponibile
+         if (exchangeRate?.rate && exchangeRate.rate > 0) {
+           conversionRate = exchangeRate.rate;
+           console.log(`💱 [NewExpense] Using rate ${formData.currency}→EUR: ${conversionRate}`);
+         } else {
+           console.warn(`⚠️ [NewExpense] No exchange rate available for ${formData.currency}→EUR!`);
+           console.warn(`⚠️ [NewExpense] Using fallback rate 1.0 - this may cause incorrect conversions!`);
+           console.warn(`⚠️ [NewExpense] Consider updating exchange rates before saving foreign currency expenses.`);
+           
+           // Mostra warning user-friendly
+           if (formData.currency !== 'EUR') {
+             console.warn(`💰 [NewExpense] ATTENZIONE: Tasso di cambio ${formData.currency}→EUR non disponibile, usando 1.0`);
+           }
+         }
+       } else {
+         console.log(`💱 [NewExpense] EUR expense, using conversion rate: 1.0`);
+       }
+
+      // 🚀 SALVA IMMEDIATAMENTE senza aspettare l'aggiornamento rates
+      console.log('💾 [NewExpense] Saving expense immediately...');
       await createExpenseMutation.mutateAsync({
         categoryId: parseInt(formData.categoryId),
         amount: parseFloat(formData.amount),
@@ -199,6 +237,14 @@ function NewExpense() {
         date: new Date(formData.date).toISOString(),
         description: formData.description || undefined,
       });
+
+      // Log background update result (non blocking)
+      ratesPromise.then(result => {
+        if (result.updated) {
+          console.log('✅ [NewExpense] Background exchange rates updated after save');
+        }
+      });
+
     } catch (err) {
       // Error handled in onError callback
       setIsSubmitting(false);
@@ -443,6 +489,28 @@ function NewExpense() {
                     </option>
                   ))}
                 </select>
+                
+                {/* Exchange Rate Indicator */}
+                {formData.currency !== 'EUR' && (
+                  <div className="mt-2 text-sm">
+                    {exchangeRateLoading ? (
+                      <div className="flex items-center text-amber-600 dark:text-amber-400">
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        <span>Caricamento tasso di cambio...</span>
+                      </div>
+                    ) : exchangeRate?.rate ? (
+                      <div className="flex items-center text-green-600 dark:text-green-400">
+                        <Check className="h-3 w-3 mr-1" />
+                        <span>Tasso: 1 {formData.currency} = {exchangeRate.rate.toFixed(4)} EUR</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-red-600 dark:text-red-400">
+                        <span className="text-xs">⚠️</span>
+                        <span className="ml-1">Tasso non disponibile - sarà usato 1.0</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
