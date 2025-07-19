@@ -24,10 +24,10 @@ interface LayoutProps {
 // Definisco la navigazione con un tipo speciale per Settings che aprirà una modale
 const baseNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, type: 'link' },
-  { name: 'View Expenses', href: '/expenses', icon: ListIcon, type: 'link' },
-  { name: 'Add Expense', href: '/expenses/new', icon: PlusIcon, type: 'link' },
-  { name: 'Categories', href: '/categories', icon: TagIcon, type: 'link' },
-  { name: 'Settings', icon: CogIcon, type: 'modal' },
+  { name: 'Elenco Spese', href: '/expenses', icon: ListIcon, type: 'link' },
+  { name: 'Registra Spese', href: '/expenses/new', icon: PlusIcon, type: 'link' },
+  { name: 'Categorie di Spesa', href: '/categories', icon: TagIcon, type: 'link' },
+  { name: 'Impostazioni', icon: CogIcon, type: 'modal' },
 ] as const;
 
 export function Layout({ children }: LayoutProps) {

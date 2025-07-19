@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { trpc } from '~/trpc/react';
 import { 
   DollarSign, 
@@ -8,8 +8,10 @@ import {
   Tag,
   ArrowLeft,
   Check,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
 import { useUnsavedChangesGuard, UnsavedChangesModal } from '~/components/UnsavedChangesGuard';
 
@@ -82,6 +84,19 @@ function NewExpense() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Nuovo stato per il dropdown delle categorie
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Funzione per ottenere il componente icona
+  const getIconComponent = (iconName: string) => {
+    const IconComponent = (LucideIcons as any)[iconName];
+    return IconComponent || (LucideIcons as any).ShoppingCart;
+  };
+
+  // Trova la categoria selezionata
+  const selectedCategory = categories?.find(cat => cat.id.toString() === formData.categoryId);
+
   // Aggiorna la valuta predefinita quando l'utente e le sue preferenze sono disponibili
   useEffect(() => {
     const safeCurrency = String(defaultCurrency || 'EUR');
@@ -91,6 +106,23 @@ function NewExpense() {
       currency: safeCurrency
     }));
   }, [defaultCurrency]);
+
+  // Chiudi dropdown quando si clicca fuori
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+
+    if (isCategoryDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCategoryDropdownOpen]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {};
@@ -365,25 +397,75 @@ function NewExpense() {
             </div>
 
             {/* Category */}
-            <div>
+            <div className="relative" ref={categoryDropdownRef}>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 <Tag className="h-4 w-4 inline mr-1" />
                 Categoria *
               </label>
-              <select
-                value={formData.categoryId}
-                onChange={(e) => handleInputChange('categoryId', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                  errors.categoryId ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Seleziona una categoria</option>
-                {categories?.map((category) => (
-                  <option key={category.id} value={category.id.toString()}>
-                    {category.icon} {category.name}
-                  </option>
-                ))}
-              </select>
+              
+              {/* Custom Category Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-left flex items-center justify-between ${
+                    errors.categoryId ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {selectedCategory ? (
+                      <>
+                        {(() => {
+                          const IconComponent = getIconComponent(selectedCategory.icon);
+                          return <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300" />;
+                        })()}
+                        <span>{selectedCategory.name}</span>
+                        {selectedCategory.description && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            - {selectedCategory.description}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-500 dark:text-gray-400">Seleziona una categoria</span>
+                    )}
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${
+                    isCategoryDropdownOpen ? 'rotate-180' : ''
+                  }`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isCategoryDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {categories?.map((category) => {
+                      const IconComponent = getIconComponent(category.icon);
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => {
+                            handleInputChange('categoryId', category.id.toString());
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                        >
+                          <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-gray-900 dark:text-white">{category.name}</span>
+                            {category.description && (
+                              <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">
+                                - {category.description}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              
               {errors.categoryId && (
                 <p className="text-red-500 text-sm mt-1">{errors.categoryId}</p>
               )}
