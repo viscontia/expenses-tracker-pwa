@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Doughnut, Line } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement } from "chart.js";
 import { trpc } from "~/trpc/react";
+import { useAuthStore } from '~/stores/auth';
 import { Globe, BarChart2, TrendingUp, Clock, RefreshCw } from 'lucide-react';
 import { RateIndicator } from '~/components/RateIndicator';
 import { ExchangeRateStatusIndicator } from '~/components/ExchangeRateStatusIndicator';
@@ -64,10 +65,12 @@ function InlineCacheMetrics() {
 function Dashboard() {
   console.log('🏠 Dashboard component rendering at:', new Date().toISOString());
   
+  // Get user's default currency preference
+  const defaultCurrency = useAuthStore((state) => state.user?.preferences?.defaultCurrency);
 
   
-  // State per i combobox della dashboard - VALORI FISSI per evitare re-render
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
+  // State per i combobox della dashboard - inizializzato con valuta predefinita utente
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(defaultCurrency || 'EUR');
   const [categoriesLimit, setCategoriesLimit] = useState<number>(10);
   
   // TIMER DI SICUREZZA: Previeni auto-trigger nei primi 2 secondi dopo il mount
@@ -106,6 +109,13 @@ function Dashboard() {
       }
     };
   }, [userHasInteracted]);
+
+  // Sync selected currency with user's default currency preference changes
+  useEffect(() => {
+    if (defaultCurrency) {
+      setSelectedCurrency(defaultCurrency);
+    }
+  }, [defaultCurrency]);
 
   // MEMOIZZA I PARAMETRI DELLE QUERY per evitare re-render
   const kpisParams = useMemo(() => ({
