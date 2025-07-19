@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { trpc } from '~/trpc/react';
+import { exchangeRateNotifications } from '~/components/ExchangeRateNotifications';
 
 interface ExchangeRateUpdateStatus {
   isUpdating: boolean;
@@ -62,11 +63,13 @@ export function useExchangeRateUpdater(options: UseExchangeRateUpdaterOptions = 
       }));
       onUpdateSuccess?.(result);
       
-      // Log risultato basato sul result
+      // Mostra notifica basata sul risultato
       if (result.skipped) {
         console.log('💱 Exchange rates already updated today - skipped');
-      } else {
+        // Non mostriamo notifica per skip, è normale
+      } else if (result.updatedRates && result.updatedRates > 0) {
         console.log(`💱 Exchange rates updated: ${result.updatedRates} rates`);
+        exchangeRateNotifications.success(result.updatedRates);
       }
     },
     onError: (error) => {
@@ -78,6 +81,10 @@ export function useExchangeRateUpdater(options: UseExchangeRateUpdaterOptions = 
         error: errorMessage
       }));
       onUpdateError?.(errorMessage);
+      
+      // Mostra notifica di errore solo per l'aggiornamento automatico iniziale
+      // Non per gli aggiornamenti silenziosi
+      exchangeRateNotifications.error(errorMessage);
     }
   });
 

@@ -5,6 +5,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 import { trpc } from "~/trpc/react";
 import { Globe, BarChart2, TrendingUp, Clock, RefreshCw } from 'lucide-react';
 import { RateIndicator } from '~/components/RateIndicator';
+import { ExchangeRateStatusIndicator } from '~/components/ExchangeRateStatusIndicator';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement);
 
@@ -448,7 +449,7 @@ function Dashboard() {
       </div>
       
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Spese Questo Mese</h3>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -480,6 +481,11 @@ function Dashboard() {
             {currencySymbol}{topCategory?.amount?.toFixed(2) || '0.00'}
           </p>
         </div>
+        
+        {/* Exchange Rate Status Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          <ExchangeRateStatusIndicator position="dashboard" />
+        </div>
       </div>
 
       {/* Charts */}
@@ -501,32 +507,37 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Rate Information Panel */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
-        <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-              Informazioni sui Tassi di Cambio
-            </h4>
-            <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="h-4 w-4 text-blue-500" />
-                <span>Tasso corrente - utilizzato per conversioni in tempo reale</span>
+      {/* Enhanced Exchange Rate Information Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0">
+              <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                Informazioni sui Tassi di Cambio
+              </h4>
+              <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="h-4 w-4 text-blue-500" />
+                  <span>Tasso corrente - utilizzato per conversioni in tempo reale</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Clock className="h-4 w-4 text-amber-500" />
+                  <span>Tasso storico - utilizzato per spese passate per maggiore accuratezza</span>
+                </div>
+                <p className="text-xs mt-2 text-blue-700 dark:text-blue-300">
+                  I tassi storici garantiscono conversioni più precise per spese registrate in date passate, 
+                  riflettendo il valore effettivo della valuta al momento della transazione.
+                </p>
               </div>
-              <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4 text-amber-500" />
-                <span>Tasso storico - utilizzato per spese passate per maggiore accuratezza</span>
-              </div>
-              <p className="text-xs mt-2 text-blue-700 dark:text-blue-300">
-                I tassi storici garantiscono conversioni più precise per spese registrate in date passate, 
-                riflettendo il valore effettivo della valuta al momento della transazione.
-              </p>
             </div>
           </div>
         </div>
+        
+        {/* Additional Exchange Rate Status */}
+        <ExchangeRateStatusIndicator position="dashboard" className="lg:col-span-1" />
       </div>
 
       {/* Recent Expenses */}

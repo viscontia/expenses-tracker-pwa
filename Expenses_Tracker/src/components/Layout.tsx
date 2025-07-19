@@ -16,6 +16,8 @@ import { useAuthStore } from '~/stores/auth';
 import { useSettingsModalStore } from '~/stores/settingsModal';
 import { InstallPWAButton } from '~/components/InstallPWAButton';
 import { SettingsModal } from '~/components/SettingsModal';
+import { ExchangeRateStatusIndicator } from '~/components/ExchangeRateStatusIndicator';
+import { ExchangeRateNotificationProvider } from '~/components/ExchangeRateNotifications';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -50,8 +52,9 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'dark' : ''}`}>
-      <div className="bg-white dark:bg-gray-900 transition-colors duration-200">
+    <ExchangeRateNotificationProvider>
+      <div className={`min-h-screen ${isDark ? 'dark' : ''}`}>
+        <div className="bg-white dark:bg-gray-900 transition-colors duration-200">
         {/* Mobile sidebar */}
         <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
           <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
@@ -136,6 +139,7 @@ export function Layout({ children }: LayoutProps) {
                 Expense Tracker
               </h1>
               <div className="flex items-center space-x-2">
+                <ExchangeRateStatusIndicator position="header" />
                 <InstallPWAButton />
                 <button
                   onClick={handleToggleTheme}
@@ -177,6 +181,12 @@ export function Layout({ children }: LayoutProps) {
                 })}
               </ul>
             </nav>
+            
+            {/* Exchange Rate Status in Sidebar */}
+            <div className="px-4 py-2">
+              <ExchangeRateStatusIndicator position="sidebar" showDetails={true} />
+            </div>
+            
             <div className="border-t border-gray-200 dark:border-gray-700 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center min-w-0 flex-1">
@@ -216,6 +226,7 @@ export function Layout({ children }: LayoutProps) {
               Expense Tracker
             </h1>
             <div className="flex items-center space-x-2">
+              <ExchangeRateStatusIndicator position="header" />
               <InstallPWAButton />
               <button
                 onClick={handleToggleTheme}
@@ -240,5 +251,6 @@ export function Layout({ children }: LayoutProps) {
         <SettingsModal isOpen={isSettingsOpen} onClose={closeSettings} />
       </div>
     </div>
+    </ExchangeRateNotificationProvider>
   );
 }

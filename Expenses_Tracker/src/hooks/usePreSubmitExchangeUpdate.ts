@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { trpc } from '~/trpc/react';
+import { exchangeRateNotifications } from '~/components/ExchangeRateNotifications';
 
 interface PreSubmitUpdateStatus {
   isChecking: boolean;
@@ -76,6 +77,11 @@ export function usePreSubmitExchangeUpdate(options: UsePreSubmitExchangeUpdateOp
         error: null
       }));
       onUpdateComplete?.(true, result);
+      
+      // Mostra notifica discreta solo se abbiamo effettivamente aggiornato
+      if (result.updatedRates && result.updatedRates > 0) {
+        exchangeRateNotifications.success(result.updatedRates);
+      }
     },
     onError: (error) => {
       const errorMessage = error.message || 'Update failed';
