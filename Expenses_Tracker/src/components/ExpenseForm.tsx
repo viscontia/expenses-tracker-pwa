@@ -141,12 +141,12 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     }
   );
 
-  // Hook per aggiornamento pre-submit delle valute
+  // Hook per aggiornamento pre-submit delle valute - SOLO per UPDATE
   const { ensureFreshRates, isProcessing: isUpdatingRates, status: ratesStatus } = usePreSubmitExchangeUpdate({
-    enabled: true,
-    timeoutMs: 5000,
+    enabled: mode === 'update', // 🚀 DISABILITATO per INSERT - tassi già presenti nel DB
+    timeoutMs: 3000,
     onUpdateStart: () => {
-      console.log('💱 [ExpenseForm] Starting exchange rate update before submission...');
+      console.log('💱 [ExpenseForm] Starting exchange rate update before UPDATE...');
     },
     onUpdateComplete: (success, result) => {
       if (success && result && !result.skipped) {
@@ -154,7 +154,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
       }
     },
     onUpdateError: (error) => {
-      console.warn('💱 [ExpenseForm] Exchange rate update failed, but proceeding with submission:', error);
+      console.warn('💱 [ExpenseForm] Exchange rate update failed, but proceeding with UPDATE:', error);
     }
   });
 
@@ -244,14 +244,17 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     setIsSubmitting(true);
 
     try {
-      // 🚀 OTTIMIZZATO: Aggiornamento asincrono non bloccante
-      console.log(`💱 [ExpenseForm] Starting non-blocking rate update and expense ${mode}...`);
+      // 🚀 INSERIMENTO DIRETTO: Nessun aggiornamento tassi per INSERT
+      console.log(`💾 [ExpenseForm] Starting ${mode === 'insert' ? 'INSERT' : 'UPDATE'} expense...`);
       
-      // Avvia aggiornamento in background SENZA attendere
-      const ratesPromise = ensureFreshRates().catch(error => {
-        console.warn(`⚠️ [ExpenseForm] Background rate update failed:`, error);
-        return { success: false, updated: false, timedOut: false };
-      });
+      // Aggiornamento tassi SOLO per UPDATE (tassi per INSERT già nel DB)
+      let ratesPromise = Promise.resolve({ success: true, updated: false, timedOut: false });
+      if (mode === 'update') {
+        ratesPromise = ensureFreshRates().catch(error => {
+          console.warn(`⚠️ [ExpenseForm] Background rate update failed:`, error);
+          return { success: false, updated: false, timedOut: false };
+        });
+      }
 
       // 🎯 LOGICA INTELLIGENTE CONVERSION RATE PER TASSO STORICO
       let conversionRate = 1; // Default per EUR
@@ -274,19 +277,14 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
           }
         }
       } else {
-        // 🆕 MODALITÀ INSERT: Calcola nuovo tasso
+        // 🆕 MODALITÀ INSERT: Usa tassi già presenti nel DB
         if (formData.currency !== 'EUR') {
-          // Prova a usare il tasso corrente, se disponibile
-          if (exchangeRate?.rate && exchangeRate.rate > 0) {
-            conversionRate = exchangeRate.rate;
-            console.log(`💱 [ExpenseForm] INSERT: Using rate ${formData.currency}→EUR: ${conversionRate}`);
-          } else {
-            console.warn(`⚠️ [ExpenseForm] INSERT: No exchange rate available for ${formData.currency}→EUR!`);
-            console.warn(`⚠️ [ExpenseForm] INSERT: Using fallback rate 1.0 - this may cause incorrect conversions!`);
-            conversionRate = 1;
-          }
+          // Usa il tasso dal DB (già caricato automaticamente)
+          conversionRate = exchangeRate?.rate || 1;
+          console.log(`💱 [ExpenseForm] INSERT: Using DB rate ${formData.currency}→EUR: ${conversionRate}`);
         } else {
-          console.log(`💱 [ExpenseForm] INSERT: EUR expense, using conversion rate: 1.0`);
+          conversionRate = 1;
+          console.log(`💱 [ExpenseForm] INSERT: EUR expense, conversion rate: 1.0`);
         }
       }
 
