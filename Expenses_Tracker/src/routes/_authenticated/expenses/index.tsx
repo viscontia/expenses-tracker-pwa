@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { trpc } from "~/trpc/react";
+import { useAuthStore } from '~/stores/auth';
 import { ResponsiveTable } from '~/components/ResponsiveTable';
 import { RateIndicator } from '~/components/RateIndicator';
 import { ExpenseDetailTable } from '~/components/ExpenseDetailTable';
@@ -27,6 +28,10 @@ export const Route = createFileRoute("/_authenticated/expenses/")({
 
 function ExpensesPage() {
   const navigate = useNavigate();
+  
+  // Get user's default currency preference
+  const defaultCurrency = useAuthStore((state) => state.user?.preferences?.defaultCurrency);
+  
   const [selectedExpenses, setSelectedExpenses] = useState<any[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailTitle, setDetailTitle] = useState('');
@@ -38,8 +43,15 @@ function ExpensesPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<any>(null);
   
-  // State for summary currency selection
-  const [summaryCurrency, setSummaryCurrency] = useState<string>('EUR');
+  // State for summary currency selection - initialized with user's default currency
+  const [summaryCurrency, setSummaryCurrency] = useState<string>(defaultCurrency || 'EUR');
+
+  // Sync summary currency with user's default currency preference changes
+  useEffect(() => {
+    if (defaultCurrency) {
+      setSummaryCurrency(defaultCurrency);
+    }
+  }, [defaultCurrency]);
 
   // Fetch expenses with filters
   const { data: expensesData, isLoading, refetch: refetchExpenses } = trpc.expenses.getExpenses.useQuery({
