@@ -164,6 +164,20 @@ function Dashboard() {
   const { refetch: refetchCurrencies } = trpc.currency.getAvailableCurrencies.useQuery(undefined, queryOptions);
   const { refetch: refetchExchangeUpdate } = trpc.currency.getLastExchangeRateUpdate.useQuery(undefined, queryOptions);
   const { refetch: refetchCacheMetrics } = trpc.currency.getCacheMetrics.useQuery(undefined, queryOptions);
+  
+  // ✅ AGGIUNTO: Query per tassi di cambio correnti per conversioni frontend
+  const { data: exchangeRates } = trpc.currency.getExchangeRate.useQuery(
+    { 
+      fromCurrency: 'EUR', 
+      toCurrency: selectedCurrency as 'ZAR' | 'EUR' | 'USD' | 'GBP' 
+    },
+    { 
+      enabled: selectedCurrency !== 'EUR',
+      staleTime: 5 * 60 * 1000,
+      retry: 2
+    }
+  );
+  
   const { refetch: refetchKpis } = trpc.dashboard.getKpis.useQuery(kpisParams, queryOptions);
   const { refetch: refetchChartData } = trpc.dashboard.getChartData.useQuery(chartDataParams, queryOptions);
   const { refetch: refetchRecentExpenses } = trpc.dashboard.getRecentExpenses.useQuery(recentExpensesParams, queryOptions);
@@ -172,30 +186,61 @@ function Dashboard() {
   const { data, isLoaded: isDashboardLoaded, isRefreshing } = dashboardState;
   const { availableCurrencies, lastExchangeUpdate, kpis, chartData, recentExpenses } = data;
   
+  // 🚀 FUNZIONI CONVERSIONE FRONTEND - Same logic as expenses list
+  const convertValueToTargetCurrency = (value: number, originalCurrency: string, targetCurrency: string): number => {
+    if (originalCurrency === targetCurrency) {
+      return value;
+    }
+    
+    // For now, assume all KPI values are in EUR (as per backend logic)
+    if (originalCurrency === 'EUR' && targetCurrency !== 'EUR') {
+      // Converting FROM EUR TO other currency
+      const currentRate = exchangeRates?.rate || 1;
+      return value * currentRate;
+    }
+    
+    // For other cases, implement when needed
+    return value;
+  };
+  
+  // ✅ CONVERSIONI KPI CORRETTE
+  const convertedKpis = kpis ? {
+    ...kpis,
+    totalCurrentMonth: convertValueToTargetCurrency(kpis.totalCurrentMonth, 'EUR', selectedCurrency),
+    totalPreviousMonth: convertValueToTargetCurrency(kpis.totalPreviousMonth, 'EUR', selectedCurrency),
+    comparativeCurrentMonth: convertValueToTargetCurrency(kpis.comparativeCurrentMonth, 'EUR', selectedCurrency),
+    totalCurrentYear: convertValueToTargetCurrency(kpis.totalCurrentYear, 'EUR', selectedCurrency),
+    totalPreviousYear: convertValueToTargetCurrency(kpis.totalPreviousYear, 'EUR', selectedCurrency),
+    comparativeCurrentYear: convertValueToTargetCurrency(kpis.comparativeCurrentYear, 'EUR', selectedCurrency),
+  } : null;
+  
   // Loading states calcolati
   const kpisLoading = isRefreshing && !kpis;
   const chartLoading = isRefreshing && !chartData;
   const expensesLoading = isRefreshing && !recentExpenses;
 
-  // Calcolo month-over-month change
-  const monthOverMonthChange = kpis?.totalPreviousMonth 
-    ? ((kpis.totalCurrentMonth - kpis.totalPreviousMonth) / kpis.totalPreviousMonth) * 100
+  // Calcolo month-over-month change - USANDO VALORI CONVERTITI
+  const monthOverMonthChange = convertedKpis?.totalPreviousMonth 
+    ? ((convertedKpis.totalCurrentMonth - convertedKpis.totalPreviousMonth) / convertedKpis.totalPreviousMonth) * 100
     : 0;
 
-  // Calcolo media giornaliera - MEMOIZED per evitare re-render
+  // Calcolo media giornaliera - MEMOIZED con valori convertiti
   const averageDaily = useMemo(() => {
-    if (!kpis?.totalCurrentMonth) return 0;
+    if (!convertedKpis?.totalCurrentMonth) return 0;
     const currentDate = new Date();
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    return kpis.totalCurrentMonth / daysInMonth;
-  }, [kpis?.totalCurrentMonth]);
+    return convertedKpis.totalCurrentMonth / daysInMonth;
+  }, [convertedKpis?.totalCurrentMonth]);
 
-  // Trova la categoria top - MEMOIZED
+  // Trova la categoria top - MEMOIZED con conversioni
   const topCategory = useMemo(() => {
-    return chartData?.categoryExpenses && chartData.categoryExpenses.length > 0 
-      ? chartData.categoryExpenses[0]
-      : null;
-  }, [chartData?.categoryExpenses]);
+    if (!chartData?.categoryExpenses || chartData.categoryExpenses.length === 0) return null;
+    const category = chartData.categoryExpenses[0];
+    return {
+      ...category,
+      amount: convertValueToTargetCurrency(category.amount, 'EUR', selectedCurrency)
+    };
+  }, [chartData?.categoryExpenses, selectedCurrency, exchangeRates]);
 
   // Trova il simbolo della valuta selezionata - MEMOIZED
   const currencySymbol = useMemo(() => {
@@ -227,30 +272,34 @@ function Dashboard() {
     },
   }), []);
 
-  // MEMOIZED CHART DATA - Previene re-render infiniti di Chart.js
+  // MEMOIZED CHART DATA - Con conversioni valuta
   const doughnutData = useMemo(() => ({
     labels: chartData?.categoryExpenses?.map((item: any) => item.name) || [],
     datasets: [
       {
-        data: chartData?.categoryExpenses?.map((item: any) => item.amount) || [],
+        data: chartData?.categoryExpenses?.map((item: any) => 
+          convertValueToTargetCurrency(item.amount, 'EUR', selectedCurrency)
+        ) || [],
         backgroundColor: CHART_COLORS,
         borderWidth: 2,
       },
     ],
-  }), [chartData?.categoryExpenses, CHART_COLORS]);
+  }), [chartData?.categoryExpenses, CHART_COLORS, selectedCurrency, exchangeRates]);
 
   const lineData = useMemo(() => ({
     labels: chartData?.monthlyTrend?.map((item: any) => item.month) || [],
     datasets: [
       {
         label: `Spese Mensili (${selectedCurrency})`,
-        data: chartData?.monthlyTrend?.map((item: any) => item.amount) || [],
+        data: chartData?.monthlyTrend?.map((item: any) => 
+          convertValueToTargetCurrency(item.amount, 'EUR', selectedCurrency)
+        ) || [],
         borderColor: "#36A2EB",
         backgroundColor: "rgba(54, 162, 235, 0.1)",
         tension: 0.4,
       },
     ],
-  }), [chartData?.monthlyTrend, selectedCurrency]);
+  }), [chartData?.monthlyTrend, selectedCurrency, exchangeRates]);
 
   // Opzioni per i combobox - MEMOIZED
   const categoryLimitOptions = useMemo(() => [
@@ -506,7 +555,7 @@ function Dashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Spese Questo Mese</h3>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {currencySymbol}{kpis?.totalCurrentMonth?.toFixed(2) || '0.00'}
+            {currencySymbol}{convertedKpis?.totalCurrentMonth?.toFixed(2) || '0.00'}
           </p>
           <p className={`text-sm ${monthOverMonthChange >= 0 ? 'text-red-600' : 'text-green-600'}`}>
             {monthOverMonthChange >= 0 ? '+' : ''}{monthOverMonthChange.toFixed(1)}% dal mese scorso
@@ -515,7 +564,7 @@ function Dashboard() {
         
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Transazioni</h3>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{kpis?.transactionCount || 0}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{convertedKpis?.transactionCount || 0}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Questo mese</p>
         </div>
         
