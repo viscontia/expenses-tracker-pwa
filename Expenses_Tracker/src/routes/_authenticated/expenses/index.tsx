@@ -7,6 +7,7 @@ import { RateIndicator } from '~/components/RateIndicator';
 import { ExpenseDetailTable } from '~/components/ExpenseDetailTable';
 import { ResponsiveModal } from '~/components/ResponsiveModal';
 import { Calendar, Filter, Search, Eye, Edit2, Trash2 } from 'lucide-react';
+import { formatCurrency } from '~/utils/formatters';
 
 // Available currencies for summary
 const CURRENCIES = [
@@ -58,7 +59,7 @@ function ExpensesPage() {
     categoryIds: selectedCategory ? [selectedCategory] : undefined,
     startDate: dateRange.start,
     endDate: dateRange.end,
-    limit: 100,
+    // ✅ RIMOSSO LIMITE - Carica TUTTE le spese
   });
 
   // Fetch categories for filter
@@ -164,10 +165,7 @@ function ExpensesPage() {
       key: 'amount',
       label: 'Importo',
       render: (value: number, row: any) => 
-        new Intl.NumberFormat('it-IT', {
-          style: 'currency',
-          currency: row.currency,
-        }).format(value),
+        formatCurrency(value, row.currency),
     },
     {
       key: 'conversionRate',
@@ -337,7 +335,7 @@ function ExpensesPage() {
             </p>
             <p className="text-xl font-bold text-gray-900 dark:text-white">
               {CURRENCIES.find(c => c.code === summaryCurrency)?.symbol}
-              {calculateTotalInCurrency(filteredExpenses, summaryCurrency).toFixed(2)}
+                              {formatCurrency(calculateTotalInCurrency(filteredExpenses, summaryCurrency), summaryCurrency)}
             </p>
             {hasConversions(filteredExpenses, summaryCurrency) && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

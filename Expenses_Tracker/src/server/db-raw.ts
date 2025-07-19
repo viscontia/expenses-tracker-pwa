@@ -194,7 +194,7 @@ export class RawExpensesDB {
     categoryIds?: number[],
     startDate?: Date,
     endDate?: Date,
-    limit: number = 50,
+    limit?: number, // ✅ OPZIONALE - undefined = nessun limite
     offset: number = 0
   ) {
     let whereConditions = ['e."userId" = $1'];
@@ -219,7 +219,7 @@ export class RawExpensesDB {
       paramIndex++;
     }
 
-    const query = `
+    let query = `
       SELECT 
         e.id,
         e.amount,
@@ -237,10 +237,16 @@ export class RawExpensesDB {
       JOIN categories c ON e."categoryId" = c.id
       WHERE ${whereConditions.join(' AND ')}
       ORDER BY e.date DESC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    params.push(limit, offset);
+    // ✅ Aggiungi LIMIT solo se specificato
+    if (limit !== undefined) {
+      query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      params.push(limit, offset);
+    } else if (offset > 0) {
+      query += ` OFFSET $${paramIndex}`;
+      params.push(offset);
+    }
     const result = await queryRaw(query, params);
     
     return result.map(row => ({

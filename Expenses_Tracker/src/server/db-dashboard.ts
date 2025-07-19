@@ -163,19 +163,27 @@ export class RawDashboardDB {
   /**
    * Ottiene le spese recenti per un utente
    */
-  static async getRecentExpenses(userId: number, limit: number = 10): Promise<ExpenseRow[]> {
-    const query = `
+  static async getRecentExpenses(userId: number, limit?: number): Promise<ExpenseRow[]> {
+    let query = `
       SELECT id, amount, currency, date, description, "userId", "categoryId"
       FROM expenses
       WHERE "userId" = $1
       ORDER BY date DESC
-      LIMIT $2
     `;
+    
+    const params: any[] = [userId];
+    
+    // ✅ Aggiungi LIMIT solo se specificato
+    if (limit !== undefined) {
+      query += ` LIMIT $2`;
+      params.push(limit);
+    }
+    
     return await profileSqlQuery(
       'getRecentExpenses',
       query,
       async () => {
-        return await queryRaw(query, [userId, limit]);
+        return await queryRaw(query, params);
       }
     );
   }

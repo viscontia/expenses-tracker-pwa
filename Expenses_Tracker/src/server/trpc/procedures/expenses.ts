@@ -35,12 +35,12 @@ const getExpensesSchema = z.object({
   categoryIds: z.array(z.number()).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  limit: z.number().min(1).max(100).default(50),
+  // ✅ RIMOSSO LIMITE - Carica tutte le spese
   offset: z.number().min(0).default(0),
 });
 
 const analyticsSchema = z.object({
-  categoryCount: z.number().min(1).max(50).default(10),
+  // ✅ RIMOSSO categoryCount limit - Nessun limite per analytics
 });
 
 export const getExpenses = protectedProcedure
@@ -56,7 +56,7 @@ export const getExpenses = protectedProcedure
       input.categoryIds,
       startDate,
       endDate,
-      input.limit,
+      undefined, // ✅ NESSUN LIMITE - Carica tutte le spese
       input.offset
     );
     
@@ -70,7 +70,7 @@ export const getExpenses = protectedProcedure
     return {
       expenses,
       total,
-      hasMore: total > input.offset + input.limit,
+      hasMore: false, // ✅ SEMPRE false - Tutte le spese caricate
     };
   });
 

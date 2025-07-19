@@ -15,6 +15,7 @@ import * as LucideIcons from 'lucide-react';
 import { useAuthStore } from '~/stores/auth';
 import { useUnsavedChangesGuard, UnsavedChangesModal } from '~/components/UnsavedChangesGuard';
 import { usePreSubmitExchangeUpdate } from '~/hooks/usePreSubmitExchangeUpdate';
+import { formatNumber } from '~/utils/formatters';
 
 type FormData = {
   amount: string;
@@ -540,7 +541,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                     ) : exchangeRate?.rate ? (
                       <div className="flex items-center text-green-600 dark:text-green-400">
                         <Check className="h-3 w-3 mr-1" />
-                        <span>Tasso: 1 {formData.currency} = {exchangeRate.rate.toFixed(4)} EUR</span>
+                        <span>Tasso: 1 {formData.currency} = {formatNumber(exchangeRate.rate, 4)} EUR</span>
                       </div>
                     ) : (
                       <div className="flex items-center text-red-600 dark:text-red-400">

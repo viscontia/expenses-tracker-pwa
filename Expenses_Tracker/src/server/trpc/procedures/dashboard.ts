@@ -236,7 +236,7 @@ const getTopCategoriesForPeriod = async (
   userId: number, 
   startDate: Date, 
   endDate: Date, 
-  limit: number,
+  limit?: number, // ✅ OPZIONALE - undefined = nessun limite
   targetCurrency: string = 'EUR'
 ) => {
     const expenses = await RawDashboardDB.getExpensesByPeriod(userId, startDate, endDate);
@@ -252,7 +252,7 @@ const getTopCategoriesForPeriod = async (
 
     const sortedCategories = Array.from(categoryTotals.entries())
         .sort(([, a], [, b]) => b - a)
-        .slice(0, limit)
+        .slice(0, limit) // ✅ undefined = prende tutte le categorie
         .map(([id]) => id);
 
     if (sortedCategories.length === 0) return [];
@@ -308,14 +308,14 @@ const getYearlyTrend = async (userId: number, years: number, targetCurrency: str
 
 export const getChartData = protectedProcedure
     .input(z.object({
-        topCategoriesLimit: z.number().min(1).max(50).default(10),
+        // ✅ RIMOSSO topCategoriesLimit - Mostra tutte le categorie
         targetCurrency: z.string().default('EUR'),
     }).optional())
     .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
         const now = new Date();
         
-        const limit = input?.topCategoriesLimit ?? 10;
+        // ✅ NESSUN LIMITE - Mostra tutte le categorie
         const targetCurrency = input?.targetCurrency ?? 'EUR';
 
         console.log(`[PROFILING] === STARTING getChartData for userId: ${userId}, currency: ${targetCurrency} ===`);
@@ -350,7 +350,7 @@ export const getChartData = protectedProcedure
             monthlyTrend,
         ] = await Promise.all([
             executeQuery(() => 
-                getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, limit, targetCurrency)
+                getTopCategoriesForPeriod(userId, startOfCurrentMonth, endOfCurrentMonth, undefined, targetCurrency)
             ),
             executeQuery(() => 
                 getMonthlyTrend(userId, 12, targetCurrency)
@@ -367,12 +367,12 @@ export const getChartData = protectedProcedure
 
 export const getRecentExpenses = protectedProcedure
     .input(z.object({
-        limit: z.number().min(1).max(50).default(10),
+        // ✅ RIMOSSO limit - Mostra tutte le spese recenti
         targetCurrency: z.string().default('EUR'),
     }).optional())
     .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
-        const limit = input?.limit ?? 10;
+        // ✅ NESSUN LIMITE - Mostra tutte le spese recenti
         const targetCurrency = input?.targetCurrency ?? 'EUR';
 
         console.log(`[PROFILING] === STARTING getRecentExpenses for userId: ${userId}, currency: ${targetCurrency} ===`);
@@ -388,7 +388,7 @@ export const getRecentExpenses = protectedProcedure
         }
 
         const rawExpenses = await executeQuery(() => 
-            RawDashboardDB.getRecentExpenses(userId, limit)
+            RawDashboardDB.getRecentExpenses(userId) // ✅ NESSUN LIMITE
         );
         
         // Get categories for all expenses

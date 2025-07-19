@@ -4,6 +4,7 @@ import type { inferRouterOutputs } from '@trpc/server';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { RateIndicator } from '~/components/RateIndicator';
+import { formatNumber } from '~/utils/formatters';
 
 type RouterOutput = inferRouterOutputs<AppRouter>;
 type Expense = RouterOutput['expenses']['getExpenses']['expenses'][number];
@@ -26,7 +27,7 @@ export function ExpenseDetailTable({
         new Date(e.date).toLocaleDateString('it-IT'),
         e.description,
         e.category.name,
-        `${e.conversionRate.toFixed(4)} ${e.currency}/EUR`,
+        `${formatNumber(e.conversionRate, 4)} ${e.currency}/EUR`,
         new Intl.NumberFormat('it-IT', {
           style: 'currency',
           currency: e.currency,

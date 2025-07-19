@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { ClockIcon, TrendingUpIcon } from 'lucide-react';
+import { formatNumber } from '~/utils/formatters';
 
 interface RateIndicatorProps {
   source: 'historical' | 'current';
@@ -38,7 +39,7 @@ export const RateIndicator: React.FC<RateIndicatorProps> = ({
     : 'Using current exchange rate (historical rate not available)';
 
   const rateText = rate && fromCurrency && toCurrency 
-    ? `${rate.toFixed(4)} ${fromCurrency}/${toCurrency}`
+            ? `${formatNumber(rate, 4)} ${fromCurrency}/${toCurrency}`
     : '';
 
   return (
@@ -48,7 +49,7 @@ export const RateIndicator: React.FC<RateIndicatorProps> = ({
         {label}
         {rate && (
           <span className="ml-1 font-mono">
-            {rate.toFixed(4)}
+            {formatNumber(rate, 4)}
           </span>
         )}
       </span>
