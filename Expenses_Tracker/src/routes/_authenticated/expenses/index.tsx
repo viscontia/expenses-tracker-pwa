@@ -97,6 +97,11 @@ function ExpensesPage() {
     }, 0);
   };
 
+  // Function to check if any conversions are needed
+  const hasConversions = (expenses: any[], targetCurrency: string): boolean => {
+    return expenses.some(expense => expense.currency !== targetCurrency);
+  };
+
   // Filter expenses by search term
   const filteredExpenses = expenses.filter(expense => 
     !searchTerm || 
@@ -322,7 +327,7 @@ function ExpensesPage() {
               {CURRENCIES.find(c => c.code === summaryCurrency)?.symbol}
               {calculateTotalInCurrency(filteredExpenses, summaryCurrency).toFixed(2)}
             </p>
-            {summaryCurrency !== 'EUR' && (
+            {hasConversions(filteredExpenses, summaryCurrency) && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 ⚠️ Conversioni approssimate - basate sui tassi storici
               </p>
