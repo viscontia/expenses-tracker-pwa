@@ -22,6 +22,7 @@ type FormData = {
   categoryId: string;
   date: string;
   description: string;
+  conversionRate?: number; // Per preservare il tasso storico in modalità update
 };
 
 const CURRENCIES = [
@@ -106,6 +107,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     categoryId: '',
     date: new Date().toISOString().split('T')[0] || new Date().toISOString().slice(0, 10),
     description: '',
+    conversionRate: undefined, // Sarà popolato dai dati esistenti in modalità update
   });
 
   const [errors, setErrors] = useState<Partial<FormData>>({});
@@ -166,6 +168,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
         categoryId: existingExpense.categoryId.toString(),
         date: new Date(existingExpense.date).toISOString().split('T')[0],
         description: (existingExpense.description || '') as string,
+        conversionRate: existingExpense.conversionRate, // Preserva il tasso storico
       });
     }
   }, [mode, existingExpense]);
@@ -250,26 +253,41 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
         return { success: false, updated: false, timedOut: false };
       });
 
-      // Determina conversion rate con gestione intelligente
+      // 🎯 LOGICA INTELLIGENTE CONVERSION RATE PER TASSO STORICO
       let conversionRate = 1; // Default per EUR
       
-      if (formData.currency !== 'EUR') {
-        // Prova a usare il tasso corrente, se disponibile
-        if (exchangeRate?.rate && exchangeRate.rate > 0) {
-          conversionRate = exchangeRate.rate;
-          console.log(`💱 [ExpenseForm] Using rate ${formData.currency}→EUR: ${conversionRate}`);
+      if (mode === 'update' && formData.conversionRate) {
+        // 📊 MODALITÀ UPDATE: Preserva tasso storico o aggiorna se errore
+        if (formData.conversionRate !== 1) {
+          // ✅ Tasso storico valido - MANTIENILO
+          conversionRate = formData.conversionRate;
+          console.log(`💱 [ExpenseForm] UPDATE: Preserving historical rate: ${conversionRate}`);
         } else {
-          console.warn(`⚠️ [ExpenseForm] No exchange rate available for ${formData.currency}→EUR!`);
-          console.warn(`⚠️ [ExpenseForm] Using fallback rate 1.0 - this may cause incorrect conversions!`);
-          console.warn(`⚠️ [ExpenseForm] Consider updating exchange rates before saving foreign currency expenses.`);
-          
-          // Mostra warning user-friendly
-          if (formData.currency !== 'EUR') {
-            console.warn(`💰 [ExpenseForm] ATTENZIONE: Tasso di cambio ${formData.currency}→EUR non disponibile, usando 1.0`);
+          // ⚠️ Tasso = 1 (errore storico) - AGGIORNALO
+          console.log(`💱 [ExpenseForm] UPDATE: Historical rate was 1.0 (error), updating...`);
+          if (formData.currency !== 'EUR' && exchangeRate?.rate && exchangeRate.rate > 0) {
+            conversionRate = exchangeRate.rate;
+            console.log(`💱 [ExpenseForm] UPDATE: Using current rate ${formData.currency}→EUR: ${conversionRate}`);
+          } else {
+            console.warn(`⚠️ [ExpenseForm] UPDATE: No current rate available, keeping 1.0`);
+            conversionRate = 1;
           }
         }
       } else {
-        console.log(`💱 [ExpenseForm] EUR expense, using conversion rate: 1.0`);
+        // 🆕 MODALITÀ INSERT: Calcola nuovo tasso
+        if (formData.currency !== 'EUR') {
+          // Prova a usare il tasso corrente, se disponibile
+          if (exchangeRate?.rate && exchangeRate.rate > 0) {
+            conversionRate = exchangeRate.rate;
+            console.log(`💱 [ExpenseForm] INSERT: Using rate ${formData.currency}→EUR: ${conversionRate}`);
+          } else {
+            console.warn(`⚠️ [ExpenseForm] INSERT: No exchange rate available for ${formData.currency}→EUR!`);
+            console.warn(`⚠️ [ExpenseForm] INSERT: Using fallback rate 1.0 - this may cause incorrect conversions!`);
+            conversionRate = 1;
+          }
+        } else {
+          console.log(`💱 [ExpenseForm] INSERT: EUR expense, using conversion rate: 1.0`);
+        }
       }
 
       // 🚀 SALVA IMMEDIATAMENTE senza aspettare l'aggiornamento rates
