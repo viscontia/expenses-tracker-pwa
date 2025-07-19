@@ -123,9 +123,8 @@ function ExpensesPage() {
 
   const handleEditExpense = (expense: any) => {
     console.log('🔄 Edit expense:', expense);
-    // For now, log the expense data - we'll create the edit route next
-    alert(`Editing expense ID: ${expense.id}\nFeature coming soon...`);
-    // TODO: Navigate to edit route when created
+    // Navigate to edit route
+    window.location.href = `/expenses/edit/${expense.id}`;
   };
 
   const columns = [

@@ -1,0 +1,724 @@
+import { useNavigate } from '@tanstack/react-router';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { trpc } from '~/trpc/react';
+import { 
+  DollarSign, 
+  Calendar, 
+  FileText, 
+  Tag,
+  ArrowLeft,
+  Check,
+  Loader2,
+  ChevronDown
+} from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
+import { useAuthStore } from '~/stores/auth';
+import { useUnsavedChangesGuard, UnsavedChangesModal } from '~/components/UnsavedChangesGuard';
+import { usePreSubmitExchangeUpdate } from '~/hooks/usePreSubmitExchangeUpdate';
+
+type FormData = {
+  amount: string;
+  currency: string;
+  categoryId: string;
+  date: string;
+  description: string;
+};
+
+const CURRENCIES = [
+  { code: 'EUR', name: 'Euro', symbol: '€' },
+  { code: 'USD', name: 'US Dollar', symbol: '$' },
+  { code: 'GBP', name: 'British Pound', symbol: '£' },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R' },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$' },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
+];
+
+interface ExpenseFormProps {
+  mode: 'insert' | 'update';
+  expenseId?: number;
+}
+
+export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
+  const navigate = useNavigate();
+  const token = useAuthStore((state) => state.token);
+  const defaultCurrency = useAuthStore((state) => state.user?.preferences?.defaultCurrency);
+  
+  // Get categories from backend
+  const { data: categories, isLoading: categoriesLoading } = trpc.categories.getAll.useQuery(
+    undefined,
+    { enabled: !!token }
+  );
+
+  // Get existing expense data for edit mode
+  // Note: This is a temporary workaround - loads recent expenses and filters by ID
+  const { data: existingExpense, isLoading: expenseLoading } = trpc.expenses.getExpenses.useQuery(
+    { 
+      limit: 100, // Increased limit to find the expense
+      offset: 0 
+    },
+    { 
+      enabled: mode === 'update' && !!expenseId,
+      select: (data) => data.expenses.find(exp => exp.id === expenseId),
+      staleTime: 30 * 1000, // Cache for 30 seconds
+    }
+  );
+
+  // Stato iniziale per valuta (sarà aggiornato da formData)
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('EUR');
+
+  // Create expense mutation
+  const createExpenseMutation = trpc.expenses.createExpense.useMutation({
+    onSuccess: () => {
+      console.log('✅ [ExpenseForm] Expense saved successfully!');
+      setIsSubmitted(true);
+      
+      setTimeout(() => {
+        console.log('🔄 [ExpenseForm] Navigating to expenses list...');
+        navigate({ to: '/expenses' });
+      }, 500);
+    },
+    onError: (error) => {
+      setError(error.message);
+      setIsSubmitting(false);
+    }
+  });
+
+  // Update expense mutation
+  const updateExpenseMutation = trpc.expenses.updateExpense.useMutation({
+    onSuccess: () => {
+      console.log('✅ [ExpenseForm] Expense updated successfully!');
+      setIsSubmitted(true);
+      
+      setTimeout(() => {
+        console.log('🔄 [ExpenseForm] Navigating to expenses list...');
+        navigate({ to: '/expenses' });
+      }, 500);
+    },
+    onError: (error) => {
+      setError(error.message);
+      setIsSubmitting(false);
+    }
+  });
+
+  const [formData, setFormData] = useState<FormData>({
+    amount: '',
+    currency: 'EUR',
+    categoryId: '',
+    date: new Date().toISOString().split('T')[0] || new Date().toISOString().slice(0, 10),
+    description: '',
+  });
+
+  const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Nuovo stato per il dropdown delle categorie
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Funzione per ottenere il componente icona
+  const getIconComponent = (iconName: string) => {
+    const IconComponent = (LucideIcons as any)[iconName];
+    return IconComponent || (LucideIcons as any).ShoppingCart;
+  };
+
+  // Trova la categoria selezionata
+  const selectedCategory = categories?.find(cat => cat.id.toString() === formData.categoryId);
+
+  // Get exchange rates dinamicamente basato sulla valuta selezionata
+  const { data: exchangeRate, isLoading: exchangeRateLoading } = trpc.currency.getExchangeRate.useQuery(
+    { 
+      fromCurrency: 'EUR', 
+      toCurrency: selectedCurrency as 'ZAR' | 'EUR' | 'USD' | 'GBP' 
+    },
+    { 
+      enabled: selectedCurrency !== 'EUR',
+      staleTime: 5 * 60 * 1000,
+      retry: 2
+    }
+  );
+
+  // Hook per aggiornamento pre-submit delle valute
+  const { ensureFreshRates, isProcessing: isUpdatingRates, status: ratesStatus } = usePreSubmitExchangeUpdate({
+    enabled: true,
+    timeoutMs: 5000,
+    onUpdateStart: () => {
+      console.log('💱 [ExpenseForm] Starting exchange rate update before submission...');
+    },
+    onUpdateComplete: (success, result) => {
+      if (success && result && !result.skipped) {
+        console.log(`💱 [ExpenseForm] Exchange rates updated successfully: ${result.updatedRates} rates`);
+      }
+    },
+    onUpdateError: (error) => {
+      console.warn('💱 [ExpenseForm] Exchange rate update failed, but proceeding with submission:', error);
+    }
+  });
+
+  // Load existing expense data for edit mode
+  useEffect(() => {
+    if (mode === 'update' && existingExpense) {
+      console.log('📝 [ExpenseForm] Loading existing expense data:', existingExpense);
+      setFormData({
+        amount: existingExpense.amount.toString(),
+        currency: existingExpense.currency,
+        categoryId: existingExpense.categoryId.toString(),
+        date: new Date(existingExpense.date).toISOString().split('T')[0],
+        description: existingExpense.description || '',
+      });
+    }
+  }, [mode, existingExpense]);
+
+  // Aggiorna la valuta predefinita quando l'utente e le sue preferenze sono disponibili
+  useEffect(() => {
+    if (mode === 'insert') {
+      const safeCurrency = String(defaultCurrency || 'EUR');
+      
+      setFormData(prev => ({
+        ...prev,
+        currency: safeCurrency
+      }));
+    }
+  }, [defaultCurrency, mode]);
+
+  // Sincronizza selectedCurrency con formData.currency per la query exchange rate
+  useEffect(() => {
+    setSelectedCurrency(formData.currency);
+  }, [formData.currency]);
+
+  // Chiudi dropdown quando si clicca fuori
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+
+    if (isCategoryDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCategoryDropdownOpen]);
+
+  const validateForm = (): boolean => {
+    const newErrors: Partial<FormData> = {};
+
+    if (!formData.amount) {
+      newErrors.amount = 'Importo richiesto';
+    } else if (isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
+      newErrors.amount = 'Importo deve essere un numero positivo';
+    }
+
+    if (!formData.categoryId) {
+      newErrors.categoryId = 'Categoria richiesta';
+    }
+
+    if (!formData.date) {
+      newErrors.date = 'Data richiesta';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    if (!token) {
+      setError('Token di autenticazione mancante');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // 🚀 OTTIMIZZATO: Aggiornamento asincrono non bloccante
+      console.log(`💱 [ExpenseForm] Starting non-blocking rate update and expense ${mode}...`);
+      
+      // Avvia aggiornamento in background SENZA attendere
+      const ratesPromise = ensureFreshRates().catch(error => {
+        console.warn(`⚠️ [ExpenseForm] Background rate update failed:`, error);
+        return { success: false, updated: false, timedOut: false };
+      });
+
+      // Determina conversion rate con gestione intelligente
+      let conversionRate = 1; // Default per EUR
+      
+      if (formData.currency !== 'EUR') {
+        // Prova a usare il tasso corrente, se disponibile
+        if (exchangeRate?.rate && exchangeRate.rate > 0) {
+          conversionRate = exchangeRate.rate;
+          console.log(`💱 [ExpenseForm] Using rate ${formData.currency}→EUR: ${conversionRate}`);
+        } else {
+          console.warn(`⚠️ [ExpenseForm] No exchange rate available for ${formData.currency}→EUR!`);
+          console.warn(`⚠️ [ExpenseForm] Using fallback rate 1.0 - this may cause incorrect conversions!`);
+          console.warn(`⚠️ [ExpenseForm] Consider updating exchange rates before saving foreign currency expenses.`);
+          
+          // Mostra warning user-friendly
+          if (formData.currency !== 'EUR') {
+            console.warn(`💰 [ExpenseForm] ATTENZIONE: Tasso di cambio ${formData.currency}→EUR non disponibile, usando 1.0`);
+          }
+        }
+      } else {
+        console.log(`💱 [ExpenseForm] EUR expense, using conversion rate: 1.0`);
+      }
+
+      // 🚀 SALVA IMMEDIATAMENTE senza aspettare l'aggiornamento rates
+      console.log(`💾 [ExpenseForm] ${mode === 'insert' ? 'Creating' : 'Updating'} expense immediately...`);
+      
+      const expenseData = {
+        categoryId: parseInt(formData.categoryId),
+        amount: parseFloat(formData.amount),
+        currency: formData.currency as 'ZAR' | 'EUR',
+        conversionRate,
+        date: new Date(formData.date).toISOString(),
+        description: formData.description || undefined,
+      };
+
+      if (mode === 'insert') {
+        await createExpenseMutation.mutateAsync(expenseData);
+      } else {
+        await updateExpenseMutation.mutateAsync({
+          id: expenseId!,
+          ...expenseData
+        });
+      }
+
+      // Log background update result (non blocking)
+      ratesPromise.then(result => {
+        if (result.updated) {
+          console.log(`✅ [ExpenseForm] Background exchange rates updated after ${mode}`);
+        }
+      });
+
+    } catch (err) {
+      // Error handled in onError callback
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  // Memoized form data for unsaved changes detection
+  const memoizedFormData = useMemo(() => formData, [formData]);
+
+  // Handle save function for unsaved changes guard
+  const handleSave = async (): Promise<void> => {
+    if (!validateForm()) {
+      throw new Error('Form validation failed');
+    }
+
+    return new Promise((resolve, reject) => {
+      const originalOnSuccess = mode === 'insert' ? 
+        createExpenseMutation.originalOptions?.onSuccess : 
+        updateExpenseMutation.originalOptions?.onSuccess;
+
+      const tempMutation = mode === 'insert' ? createExpenseMutation : updateExpenseMutation;
+      
+      // Temporarily override onSuccess to resolve our promise
+      const expenseData = {
+        categoryId: parseInt(formData.categoryId),
+        amount: parseFloat(formData.amount),
+        currency: formData.currency as 'ZAR' | 'EUR',
+        conversionRate: formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1),
+        date: new Date(formData.date).toISOString(),
+        description: formData.description || undefined,
+      };
+
+      if (mode === 'insert') {
+        createExpenseMutation.mutate(expenseData, {
+          onSuccess: () => {
+            resolve();
+            originalOnSuccess?.();
+          },
+          onError: (error) => {
+            reject(error);
+          }
+        });
+      } else {
+        updateExpenseMutation.mutate({ id: expenseId!, ...expenseData }, {
+          onSuccess: () => {
+            resolve();
+            originalOnSuccess?.();
+          },
+          onError: (error) => {
+            reject(error);
+          }
+        });
+      }
+    });
+  };
+
+  // Unsaved changes guard
+  const { showUnsavedModal, setShowUnsavedModal, hasUnsavedChanges } = useUnsavedChangesGuard({
+    formData: memoizedFormData,
+    onSave: handleSave,
+    enabled: true,
+    message: mode === 'insert' ? 
+      "Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?" :
+      "Hai modificato questa spesa. Vuoi salvare le modifiche prima di uscire?"
+  });
+
+  // Check if form is loading
+  if ((mode === 'update' && expenseLoading) || categoriesLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Caricamento...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if expense not found (for edit mode)
+  if (mode === 'update' && !expenseLoading && !existingExpense) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+            <h2 className="text-lg font-medium text-red-900 dark:text-red-100 mb-2">
+              Spesa non trovata
+            </h2>
+            <p className="text-red-700 dark:text-red-300 mb-4">
+              La spesa con ID {expenseId} non è stata trovata.
+            </p>
+            <button
+              onClick={() => navigate({ to: '/expenses' })}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            >
+              Torna alla lista spese
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const pageTitle = mode === 'insert' ? 'Nuova Spesa' : 'Modifica Spesa';
+  const submitButtonText = mode === 'insert' ? 'Salva Spesa' : 'Aggiorna Spesa';
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center space-x-4 mb-6">
+          <button
+            onClick={() => navigate({ to: '/expenses' })}
+            className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {pageTitle}
+          </h1>
+        </div>
+
+        {/* Form Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+          {/* Progress/Status Indicator */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+              <span className="flex items-center">
+                <DollarSign className="h-4 w-4 mr-1" />
+                {mode === 'insert' ? 'Registrazione nuova spesa' : 'Modifica spesa esistente'}
+              </span>
+              {hasUnsavedChanges && (
+                <div className="flex items-center text-amber-600 dark:text-amber-400">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full mr-2"></div>
+                  <span>Modifiche non salvate</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Info Box */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              {mode === 'insert' ? 
+                'I tuoi dati sono protetti automaticamente. Prima di salvare ogni spesa, aggiorniamo i tassi di cambio per garantire precisione.' :
+                'Le modifiche verranno salvate mantenendo il tasso di cambio originale della spesa.'
+              }
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+              💡 <strong>Suggerimento:</strong> Usa <kbd className="px-1 py-0.5 text-xs bg-blue-200 dark:bg-blue-800 rounded">Ctrl+S</kbd> (o <kbd className="px-1 py-0.5 text-xs bg-blue-200 dark:bg-blue-800 rounded">Cmd+S</kbd> su Mac) per salvare rapidamente
+            </p>
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+              <p className="text-red-800 dark:text-red-200">{error}</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Amount and Currency Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <DollarSign className="h-4 w-4 inline mr-1" />
+                  Importo *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => handleInputChange('amount', e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+                    errors.amount ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.amount && (
+                  <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Valuta
+                </label>
+                <select
+                  value={formData.currency}
+                  onChange={(e) => handleInputChange('currency', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                >
+                  {CURRENCIES.map((currency) => (
+                    <option key={currency.code} value={currency.code}>
+                      {currency.symbol} {currency.code}
+                    </option>
+                  ))}
+                </select>
+                
+                {/* Exchange Rate Indicator */}
+                {formData.currency !== 'EUR' && (
+                  <div className="mt-2 text-sm">
+                    {exchangeRateLoading ? (
+                      <div className="flex items-center text-amber-600 dark:text-amber-400">
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        <span>Caricamento tasso di cambio...</span>
+                      </div>
+                    ) : exchangeRate?.rate ? (
+                      <div className="flex items-center text-green-600 dark:text-green-400">
+                        <Check className="h-3 w-3 mr-1" />
+                        <span>Tasso: 1 {formData.currency} = {exchangeRate.rate.toFixed(4)} EUR</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-red-600 dark:text-red-400">
+                        <span className="text-xs">⚠️</span>
+                        <span className="ml-1">Tasso non disponibile - sarà usato 1.0</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Category */}
+            <div className="relative" ref={categoryDropdownRef}>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Tag className="h-4 w-4 inline mr-1" />
+                Categoria *
+              </label>
+              
+              {/* Custom Category Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-left flex items-center justify-between ${
+                    errors.categoryId ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {selectedCategory ? (
+                      <>
+                        {(() => {
+                          const IconComponent = getIconComponent(selectedCategory.icon);
+                          return <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300" />;
+                        })()}
+                        <span>{selectedCategory.name}</span>
+                        {selectedCategory.description && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            - {selectedCategory.description}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-500">Seleziona una categoria</span>
+                    )}
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown List */}
+                {isCategoryDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {categories?.map((category) => {
+                      const IconComponent = getIconComponent(category.icon);
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() => {
+                            handleInputChange('categoryId', category.id.toString());
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                        >
+                          <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">{category.name}</div>
+                            {category.description && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{category.description}</div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              
+              {errors.categoryId && (
+                <p className="text-red-500 text-sm mt-1">{errors.categoryId}</p>
+              )}
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Data *
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => handleInputChange('date', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
+                  errors.date ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
+              />
+              {errors.date && (
+                <p className="text-red-500 text-sm mt-1">{errors.date}</p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <FileText className="h-4 w-4 inline mr-1" />
+                Descrizione (opzionale)
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+                placeholder="Aggiungi una descrizione..."
+                maxLength={200}
+              />
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {formData.description.length}/200 caratteri
+              </div>
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => navigate({ to: '/expenses' })}
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-6 py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex items-center justify-center"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Annulla
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || isUpdatingRates}
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {isUpdatingRates ? 'Aggiornando valute...' : (mode === 'insert' ? 'Salvando...' : 'Aggiornando...')}
+                  </>
+                ) : (
+                  submitButtonText
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Categories Info */}
+        {(!categories || categories.length === 0) && (
+          <div className="mt-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+            <p className="text-amber-800 dark:text-amber-200 text-sm">
+              <strong>Nessuna categoria disponibile.</strong> Prima di aggiungere spese, 
+              <a href="/categories" className="underline ml-1">crea almeno una categoria</a>.
+            </p>
+          </div>
+        )}
+
+        {/* Success State */}
+        {isSubmitted && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-8 text-center">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                {mode === 'insert' ? 'Spesa Salvata!' : 'Spesa Aggiornata!'}
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                {mode === 'insert' ? 
+                  'La tua spesa è stata registrata con successo.' :
+                  'Le modifiche sono state salvate con successo.'
+                }
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Modale di conferma per modifiche non salvate */}
+        <UnsavedChangesModal
+          isOpen={showUnsavedModal}
+          onClose={() => setShowUnsavedModal(false)}
+          onSave={handleSave}
+          onDiscard={() => {
+            setShowUnsavedModal(false);
+            navigate({ to: '/expenses' });
+          }}
+          title={mode === 'insert' ? "Modifiche non salvate" : "Modifiche non salvate"}
+          message={mode === 'insert' ? 
+            "Hai inserito dei dati per una nuova spesa. Vuoi salvarla prima di uscire?" :
+            "Hai modificato questa spesa. Vuoi salvare le modifiche prima di uscire?"
+          }
+          saveLabel={mode === 'insert' ? "Salva Spesa" : "Salva Modifiche"}
+          discardLabel="Esci senza salvare"
+        />
+      </div>
+    </div>
+  );
+} 
