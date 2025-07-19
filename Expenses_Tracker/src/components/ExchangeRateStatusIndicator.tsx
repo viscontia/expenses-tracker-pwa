@@ -50,6 +50,16 @@ export function ExchangeRateStatusIndicator({
     }
   );
 
+  // Query per le cache metrics (opzionale, per admin)
+  const { data: cacheMetrics } = trpc.currency.getCacheMetrics.useQuery(
+    undefined,
+    {
+      refetchInterval: 120000, // Ogni 2 minuti
+      refetchOnWindowFocus: false,
+      retry: 1
+    }
+  );
+
   useEffect(() => {
     if (isLoading) {
       setStatus(prev => ({ ...prev, isLoading: true, error: null }));
@@ -178,6 +188,14 @@ export function ExchangeRateStatusIndicator({
             <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
               <p><strong>Stato:</strong> {indicator.label}</p>
               <p><strong>Ultimo aggiornamento:</strong> {formatLastUpdate()}</p>
+              {cacheMetrics?.success && cacheMetrics.status && (
+                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    <strong>Cache:</strong> {cacheMetrics.status.size} entries, 
+                    {Math.round(cacheMetrics.status.hitRate * 100)}% hit rate
+                  </p>
+                </div>
+              )}
               {status.error && (
                 <p className="text-red-500 text-xs">{status.error}</p>
               )}

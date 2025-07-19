@@ -2,6 +2,7 @@ import { z } from "zod";
 import { baseProcedure } from "~/server/trpc/main";
 import { fetchExchangeRate, convertAmount } from "~/server/utils/currency";
 import { RawCurrencyDB } from "~/server/db-raw";
+import { exchangeRateCache } from "~/server/services/exchange-rate-cache";
 
 const getExchangeRateSchema = z.object({
   fromCurrency: z.string(),
@@ -193,6 +194,89 @@ export const getAvailableCurrencies = baseProcedure
         name: currencyNames[code] || code,
         symbol: getSymbolForCurrency(code),
       }));
+    }
+  });
+
+// Procedura per ottenere le cache metrics
+export const getCacheMetrics = baseProcedure
+  .query(async () => {
+    try {
+      const metrics = exchangeRateCache.getMetrics();
+      const status = exchangeRateCache.getStatusSummary();
+      
+      return {
+        success: true,
+        metrics,
+        status,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('Error fetching cache metrics:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  });
+
+// Procedura per invalidare la cache
+export const invalidateCache = baseProcedure
+  .input(z.object({
+    currency: z.string().optional(),
+    clearAll: z.boolean().optional(),
+  }))
+  .mutation(async ({ input }) => {
+    try {
+      let removed = 0;
+      
+      if (input.clearAll) {
+        exchangeRateCache.clear();
+        removed = -1; // Indicates full clear
+      } else if (input.currency) {
+        removed = exchangeRateCache.invalidateCurrency(input.currency);
+      }
+      
+      return {
+        success: true,
+        removed,
+        message: input.clearAll 
+          ? 'Cache completely cleared' 
+          : `Cache invalidated for ${input.currency || 'all currencies'}`,
+      };
+    } catch (error) {
+      console.error('Error invalidating cache:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+// Procedura per warming della cache
+export const warmCache = baseProcedure
+  .input(z.object({
+    pairs: z.array(z.object({
+      from: z.string(),
+      to: z.string(),
+      rate: z.number(),
+    })),
+  }))
+  .mutation(async ({ input }) => {
+    try {
+      exchangeRateCache.warmCacheWithRates(input.pairs);
+      
+      return {
+        success: true,
+        warmed: input.pairs.length,
+        message: `Cache warmed with ${input.pairs.length} exchange rate pairs`,
+      };
+    } catch (error) {
+      console.error('Error warming cache:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
   });
 

@@ -1,4 +1,5 @@
 import { db } from "~/server/db";
+import { exchangeRateCache } from "~/server/services/exchange-rate-cache";
 
 // Using a free exchange rate API
 const EXCHANGE_API_URL = 'https://api.exchangerate-api.com/v4/latest';
@@ -14,6 +15,13 @@ export const fetchExchangeRate = async (
   fromCurrency: string,
   toCurrency: string,
 ): Promise<number> => {
+  // First check enhanced cache
+  const cachedRate = exchangeRateCache.getExchangeRate(fromCurrency, toCurrency);
+  if (cachedRate !== null) {
+    console.log(`💾 Cache hit for ${fromCurrency} → ${toCurrency}: ${cachedRate}`);
+    return cachedRate;
+  }
+
   try {
     // Check if we have a recent rate (within last hour)
     const recentRate = await db.exchangeRate.findFirst({
@@ -30,6 +38,8 @@ export const fetchExchangeRate = async (
     });
 
     if (recentRate) {
+      // Cache the database rate
+      exchangeRateCache.setExchangeRate(fromCurrency, toCurrency, recentRate.rate, 'database');
       return recentRate.rate;
     }
 
@@ -56,6 +66,10 @@ export const fetchExchangeRate = async (
       },
     });
 
+    // Cache the fresh API rate
+    exchangeRateCache.setExchangeRate(fromCurrency, toCurrency, rate, 'api');
+    console.log(`💾 Cached fresh rate ${fromCurrency} → ${toCurrency}: ${rate}`);
+
     return rate;
   } catch (error) {
     console.error('Error fetching exchange rate:', error);
@@ -72,6 +86,8 @@ export const fetchExchangeRate = async (
     });
 
     if (lastKnownRate) {
+      // Cache the fallback rate
+      exchangeRateCache.setExchangeRate(fromCurrency, toCurrency, lastKnownRate.rate, 'database');
       return lastKnownRate.rate;
     }
 
@@ -81,7 +97,11 @@ export const fetchExchangeRate = async (
       EUR: { ZAR: 20.0 },
     };
 
-    return fallbackRates[fromCurrency]?.[toCurrency] || 1;
+    const fallbackRate = fallbackRates[fromCurrency]?.[toCurrency] || 1;
+    // Cache fallback rate with shorter TTL
+    exchangeRateCache.setExchangeRate(fromCurrency, toCurrency, fallbackRate, 'fallback');
+    
+    return fallbackRate;
   }
 };
 

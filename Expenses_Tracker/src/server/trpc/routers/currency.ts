@@ -4,7 +4,10 @@ import {
   convertCurrency,
   updateDailyExchangeRates,
   getAvailableCurrencies,
-  getLastExchangeRateUpdate
+  getLastExchangeRateUpdate,
+  getCacheMetrics,
+  invalidateCache,
+  warmCache
 } from "~/server/trpc/procedures/currency";
 
 export const currencyRouter = createTRPCRouter({
@@ -13,4 +16,7 @@ export const currencyRouter = createTRPCRouter({
   updateDailyExchangeRates,
   getAvailableCurrencies,
   getLastExchangeRateUpdate,
+  getCacheMetrics,
+  invalidateCache,
+  warmCache,
 }); 

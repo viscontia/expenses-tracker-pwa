@@ -21,6 +21,46 @@ export const Route = createFileRoute("/_authenticated/dashboard/")({
   component: Dashboard,
 });
 
+// Componente inline per cache metrics
+function InlineCacheMetrics() {
+  const { data: cacheMetrics, isLoading } = trpc.currency.getCacheMetrics.useQuery(
+    undefined,
+    {
+      refetchInterval: 30000, // 30 secondi
+      retry: 1
+    }
+  );
+
+  if (isLoading) {
+    return <div className="text-xs text-gray-500">Caricando...</div>;
+  }
+
+  if (!cacheMetrics?.success || !cacheMetrics.status) {
+    return <div className="text-xs text-gray-500">Cache non disponibile</div>;
+  }
+
+  const { status } = cacheMetrics;
+
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="flex justify-between">
+        <span className="text-gray-600 dark:text-gray-400">Entries:</span>
+        <span className="font-medium text-gray-900 dark:text-white">{status.size}</span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-gray-600 dark:text-gray-400">Hit Rate:</span>
+        <span className={`font-medium ${status.hitRate > 0.8 ? 'text-green-600' : status.hitRate > 0.5 ? 'text-yellow-600' : 'text-red-600'}`}>
+          {Math.round(status.hitRate * 100)}%
+        </span>
+      </div>
+      <div className="flex justify-between">
+        <span className="text-gray-600 dark:text-gray-400">API Calls Saved:</span>
+        <span className="font-medium text-blue-600 dark:text-blue-400">{status.apiCallsSaved}</span>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
   console.log('🏠 Dashboard component rendering at:', new Date().toISOString());
   
@@ -536,8 +576,20 @@ function Dashboard() {
           </div>
         </div>
         
-        {/* Additional Exchange Rate Status */}
-        <ExchangeRateStatusIndicator position="dashboard" className="lg:col-span-1" />
+        {/* Additional Exchange Rate Status with Cache Metrics */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <ExchangeRateStatusIndicator position="dashboard" />
+          
+          {/* Cache Performance Section */}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+              Performance Cache
+            </h4>
+                         {/* Cache Metrics Inline */}
+             <InlineCacheMetrics />
+          </div>
+        </div>
       </div>
 
       {/* Recent Expenses */}

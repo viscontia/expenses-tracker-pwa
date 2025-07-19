@@ -41,6 +41,9 @@ export function useExchangeRateUpdater(options: UseExchangeRateUpdaterOptions = 
   const hasTriggeredUpdate = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Mutation per invalidare cache quando i tassi vengono aggiornati
+  const invalidateCacheMutation = trpc.currency.invalidateCache.useMutation();
+
   // Mutation per l'aggiornamento (non-bloccante)
   const updateRatesMutation = trpc.currency.updateDailyExchangeRates.useMutation({
     onMutate: () => {
@@ -70,6 +73,10 @@ export function useExchangeRateUpdater(options: UseExchangeRateUpdaterOptions = 
       } else if (result.updatedRates && result.updatedRates > 0) {
         console.log(`💱 Exchange rates updated: ${result.updatedRates} rates`);
         exchangeRateNotifications.success(result.updatedRates);
+        
+        // Invalida cache per garantire tassi freschi
+        invalidateCacheMutation.mutate({ clearAll: true });
+        console.log('💾 Cache invalidated after exchange rate update');
       }
     },
     onError: (error) => {
