@@ -33,7 +33,17 @@ export class HistoricalRateServiceImpl implements HistoricalRateService {
     logger.logRateSaveStart(expenseId, expenseDate);
     
     try {
-      // Get all supported currencies for comprehensive rate storage
+      // 🚀 OTTIMIZZAZIONE CRITICA: Salva solo i tassi necessari per questa spesa
+      // PROBLEMA RISOLTO: Prima salvava 56 tassi per spesa (8x7 combinazioni) = CONGELAMENTO!
+      // SOLUZIONE: Salva solo il tasso specifico necessario
+      
+      // Ottieni la spesa per sapere quale valuta stiamo usando
+      const expense = await RawHistoricalRatesDB.findExpenseById(expenseId);
+      if (!expense) {
+        logger.error(`Expense ${expenseId} not found for historical rate save`);
+        return;
+      }
+
       const ratesToSave: Array<{
         expenseId: number;
         fromCurrency: string;
@@ -41,27 +51,28 @@ export class HistoricalRateServiceImpl implements HistoricalRateService {
         rate: number;
       }> = [];
 
-      // Fetch rates for all currency pairs
-      for (const fromCurrency of this.supportedCurrencies) {
-        for (const toCurrency of this.supportedCurrencies) {
-          if (fromCurrency !== toCurrency) {
-            try {
-              const rate = await fetchExchangeRate(fromCurrency, toCurrency);
-              ratesToSave.push({
-                expenseId,
-                fromCurrency,
-                toCurrency,
-                rate
-              });
-            } catch (error) {
-              logger.logApiRateFetchFailure(fromCurrency, toCurrency, error instanceof Error ? error : String(error));
-              // Continue with other rates even if one fails
-            }
+      const expenseCurrency = expense.currency;
+      
+      // Solo se non è EUR, salviamo il tasso necessario per la conversione
+      if (expenseCurrency !== 'EUR') {
+        try {
+          // Salva solo il tasso dalla valuta della spesa verso EUR (valuta base)
+          const rateToEur = await fetchExchangeRate(expenseCurrency, 'EUR');
+          if (rateToEur && rateToEur > 0) {
+            ratesToSave.push({
+              expenseId,
+              fromCurrency: expenseCurrency,
+              toCurrency: 'EUR',
+              rate: rateToEur
+            });
+            logger.debug(`Fetched rate ${expenseCurrency}→EUR: ${rateToEur}`);
           }
+        } catch (error) {
+          logger.logApiRateFetchFailure(expenseCurrency, 'EUR', error instanceof Error ? error : String(error));
         }
       }
 
-      // Save all rates to database
+      // Salva i tassi nel database (0-1 tassi invece di 56!)
       if (ratesToSave.length > 0) {
         await RawHistoricalRatesDB.createManyExpenseExchangeRates(
           ratesToSave.map(rate => ({
@@ -75,16 +86,17 @@ export class HistoricalRateServiceImpl implements HistoricalRateService {
 
         const duration = Date.now() - startTime;
         logger.logRateSaveSuccess(expenseId, ratesToSave.length, duration);
+        console.log(`✅ [HistoricalRate] Saved ${ratesToSave.length} rate(s) for expense ${expenseId} in ${duration}ms`);
       } else {
         const duration = Date.now() - startTime;
-        const error = 'No rates could be fetched';
-        logger.logRateSaveFailure(expenseId, error, duration);
+        console.log(`ℹ️ [HistoricalRate] No rates needed for EUR expense ${expenseId} (${duration}ms)`);
       }
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMsg = error instanceof Error ? error : String(error);
       logger.logRateSaveFailure(expenseId, errorMsg, duration);
-      throw new Error(`${HistoricalRateError.DATABASE_ERROR}: Failed to save historical rates`);
+      console.error(`❌ [HistoricalRate] Failed to save rates for expense ${expenseId}:`, errorMsg);
+      // NON facciamo throw per non bloccare l'inserimento della spesa
     }
   }
 

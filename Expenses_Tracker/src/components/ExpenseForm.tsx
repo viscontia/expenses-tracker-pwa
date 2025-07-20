@@ -74,10 +74,31 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
       console.log('✅ [ExpenseForm] Expense saved successfully!');
       setIsSubmitted(true);
       
-      setTimeout(() => {
-        console.log('🔄 [ExpenseForm] Navigating to expenses list...');
-        navigate({ to: '/expenses' });
-      }, 500);
+      if (!existingExpense && continueInserting) {
+        // Se stiamo creando una nuova spesa e l'utente vuole continuare
+        console.log('🔄 [ExpenseForm] Resetting form for new expense...');
+        setTimeout(() => {
+          // Reset della form per nuovo inserimento
+          setFormData({
+            amount: '',
+            currency: formData.currency, // Mantieni la valuta selezionata
+            categoryId: '',
+            date: new Date().toISOString().split('T')[0],
+            description: '',
+            conversionRate: undefined,
+          });
+          setIsSubmitted(false);
+          setIsSubmitting(false);
+          setError(null);
+          setErrors({});
+        }, 500);
+      } else {
+        // Navigazione normale
+        setTimeout(() => {
+          console.log('🔄 [ExpenseForm] Navigating to expenses list...');
+          navigate({ to: '/expenses' });
+        }, 500);
+      }
     },
     onError: (error) => {
       setError(error.message);
@@ -115,6 +136,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [continueInserting, setContinueInserting] = useState(false);
 
   // Nuovo stato per il dropdown delle categorie
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -493,6 +515,28 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
               )}
             </div>
           </div>
+
+          {/* Checkbox Continua Inserimento - Solo in modalità insert */}
+          {mode === 'insert' && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={continueInserting}
+                  onChange={(e) => setContinueInserting(e.target.checked)}
+                  className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-green-900 dark:text-green-100">
+                    Continua a rimanere in Inserimento Spese
+                  </span>
+                  <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                    Se attivato, dopo ogni registrazione la form si resetta per inserire una nuova spesa
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Info Box */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
