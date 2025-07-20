@@ -311,7 +311,7 @@ function ExpensesPage() {
           // Aggiungi header categoria
           tableData.push([
             {
-              content: `📂 ${categoryName} (${categoryExpenses.length} spese • ${formatCurrency(categoryTotal, summaryCurrency)})`,
+              content: `${categoryName} (${categoryExpenses.length} spese • ${formatCurrency(categoryTotal, summaryCurrency)})`,
               colSpan: 5,
               styles: {
                 fillColor: [59, 130, 246], // Blu
@@ -343,6 +343,19 @@ function ExpensesPage() {
                 textColor: 255, // Bianco
                 fontStyle: 'bold',
                 fontSize: 9
+              }
+            }
+          ]);
+          
+          // Aggiungi riga vuota dopo il totale categoria per leggibilità
+          tableData.push([
+            {
+              content: '',
+              colSpan: 5,
+              styles: {
+                fillColor: [255, 255, 255], // Bianco
+                textColor: 0,
+                fontSize: 4
               }
             }
           ]);
