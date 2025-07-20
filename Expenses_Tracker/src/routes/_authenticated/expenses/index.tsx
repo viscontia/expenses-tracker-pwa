@@ -171,11 +171,11 @@ function ExpensesPage() {
 
   const expenses = expensesData?.expenses || [];
   
-  // 🔍 DEBUG: Log per verificare le spese caricate nell'elenco
-  console.log('🔍 Expenses List Debug - activeFilters:', activeFilters);
-  console.log('🔍 Expenses List Debug - expensesCount:', expenses.length);
-  console.log('🔍 Expenses List Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], summaryCurrency));
-  console.log('🔍 Expenses List Debug - summaryCurrency:', summaryCurrency);
+  // 🔍 DEBUG: Log per verificare le spese caricate nell'elenco (solo per test)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Expenses List Debug - expensesCount:', expenses.length);
+    console.log('🔍 Expenses List Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], summaryCurrency));
+  }
 
   // Function to check if any conversions are needed
   const hasConversions = (expenses: any[], targetCurrency: string): boolean => {

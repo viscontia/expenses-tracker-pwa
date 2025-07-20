@@ -119,14 +119,14 @@ function Dashboard() {
   
   const expenses = expensesData?.expenses || [];
   
-  // 🔍 DEBUG: Log per verificare le spese caricate
-  console.log('🔍 Dashboard Debug - timeFilter:', timeFilter);
-  console.log('🔍 Dashboard Debug - dateRange:', dateRange);
-  console.log('🔍 Dashboard Debug - dateRange start:', dateRange.start);
-  console.log('🔍 Dashboard Debug - dateRange end:', dateRange.end);
-  console.log('🔍 Dashboard Debug - expensesCount:', expenses.length);
-  console.log('🔍 Dashboard Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency));
-  console.log('🔍 Dashboard Debug - selectedCurrency:', selectedCurrency);
+  // 🔍 DEBUG: Log per verificare le spese caricate (solo per test)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Dashboard Debug - timeFilter:', timeFilter);
+    console.log('🔍 Dashboard Debug - dateRange start:', dateRange.start);
+    console.log('🔍 Dashboard Debug - dateRange end:', dateRange.end);
+    console.log('🔍 Dashboard Debug - expensesCount:', expenses.length);
+    console.log('🔍 Dashboard Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency));
+  }
   
   // ✅ CALCOLI KPI FRONTEND - Usa spese già filtrate dal backend
   const kpis = useMemo(() => {
