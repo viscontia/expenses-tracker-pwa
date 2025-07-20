@@ -320,15 +320,55 @@ function Dashboard() {
     }
   }, []);
 
-  // 📅 HELPER per etichetta mese corrente
-  const currentMonthLabel = useMemo(() => {
+  // 📅 HELPER per etichette dinamiche basate sul periodo selezionato
+  const getPeriodLabel = useMemo(() => {
     const now = new Date();
     const monthNames = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
                        'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
-    const monthName = monthNames[now.getMonth()];
-    const year = now.getFullYear();
-    return `mese di ${monthName} ${year}`;
-  }, []);
+    
+    switch (timeFilter) {
+      case 'current':
+        const currentMonthName = monthNames[now.getMonth()];
+        const currentYear = now.getFullYear();
+        return `mese di ${currentMonthName} ${currentYear}`;
+        
+      case 'previous':
+        const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevMonthName = monthNames[prevMonth];
+        return `mese di ${prevMonthName} ${prevYear}`;
+        
+      case 'yoy':
+        const lastYear = now.getFullYear() - 1;
+        return `anno ${lastYear}`;
+        
+      case '7d':
+        return 'ultimi 7 giorni';
+        
+      case '30d':
+        return 'ultimi 30 giorni';
+        
+      case '90d':
+        return 'ultimi 90 giorni';
+        
+      case 'mom':
+        const currentMonthNameMoM = monthNames[now.getMonth()];
+        const currentYearMoM = now.getFullYear();
+        const prevMonthMoM = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        const prevYearMoM = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevMonthNameMoM = monthNames[prevMonthMoM];
+        return `${prevMonthNameMoM} ${prevYearMoM} vs ${currentMonthNameMoM} ${currentYearMoM}`;
+        
+      case 'ytd':
+        const currentYearYTD = now.getFullYear();
+        return `anno ${currentYearYTD} (YTD)`;
+        
+      default:
+        const defaultMonthName = monthNames[now.getMonth()];
+        const defaultYear = now.getFullYear();
+        return `mese di ${defaultMonthName} ${defaultYear}`;
+    }
+  }, [timeFilter]);
 
   // ===== TUTTI GLI HOOK DEVONO ESSERE SOPRA QUESTA LINEA =====
   
@@ -531,7 +571,7 @@ function Dashboard() {
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">Spese {currentMonthLabel}</p>
+                              <p className="text-sm font-medium text-gray-400">Spese {getPeriodLabel}</p>
               <p className="text-2xl font-bold text-white">
                 {formatCurrency(kpis?.totalCurrentMonth || 0, selectedCurrency ?? 'EUR')}
               </p>
@@ -549,7 +589,7 @@ function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-400">Transazioni</p>
               <p className="text-2xl font-bold text-white">{kpis?.transactionCount || 0}</p>
-              <p className="text-sm text-gray-400">{currentMonthLabel}</p>
+                              <p className="text-sm text-gray-400">{getPeriodLabel}</p>
             </div>
             <BarChart2 className="h-8 w-8 text-green-400" />
           </div>
@@ -563,7 +603,7 @@ function Dashboard() {
               <p className="text-2xl font-bold text-white">
                 {formatCurrency(dailyAverage || 0, selectedCurrency || 'EUR')}
               </p>
-              <p className="text-sm text-gray-400">Basata su {currentMonthLabel}</p>
+                              <p className="text-sm text-gray-400">Basata su {getPeriodLabel}</p>
             </div>
             <Clock className="h-8 w-8 text-purple-400" />
           </div>
@@ -589,7 +629,7 @@ function Dashboard() {
         {/* 1. Donut Chart - Spese per Categoria */}
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Spese per Categoria - {currentMonthLabel}</h3>
+            <h3 className="text-lg font-semibold text-white">Spese per Categoria - {getPeriodLabel}</h3>
             <button 
               onClick={() => handleExportChart('donut-chart')}
               className="text-gray-400 hover:text-white transition-colors"
@@ -660,7 +700,7 @@ function Dashboard() {
         {/* 2. Horizontal Bar Chart - Importi per Categoria */}
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Ranking Categorie</h3>
+            <h3 className="text-lg font-semibold text-white">Ranking Categorie - {getPeriodLabel}</h3>
             <button 
               onClick={() => handleExportChart('horizontal-bar-chart')}
               className="text-gray-400 hover:text-white transition-colors"
