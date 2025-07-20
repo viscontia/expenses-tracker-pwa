@@ -114,47 +114,32 @@ function Dashboard() {
   
   const expenses = expensesData?.expenses || [];
   
-  // ✅ CALCOLI KPI FRONTEND - Basati sul periodo selezionato
+  // 🔍 DEBUG: Log per verificare le spese caricate
+  console.log('🔍 Dashboard Debug:', {
+    timeFilter,
+    dateRange,
+    expensesCount: expenses.length,
+    expensesDates: expenses.map(e => ({ date: e.date, amount: e.amount, currency: e.currency })),
+    totalCalculated: calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency)
+  });
+  
+  // ✅ CALCOLI KPI FRONTEND - Usa spese già filtrate dal backend
   const kpis = useMemo(() => {
     if (!expenses.length) return null;
     
-    // Calcola KPI basati sul periodo selezionato invece che sempre sul mese corrente
-    const now = new Date();
-    let periodStart: Date;
-    let periodEnd: Date;
-    
-    switch (timeFilter) {
-      case 'previous':
-        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-        break;
-      case 'yoy':
-        periodStart = new Date(now.getFullYear() - 1, 0, 1);
-        periodEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-        break;
-      case 'current':
-      default:
-        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        break;
-    }
-    
-    // Filtra spese per il periodo selezionato
-    const periodExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= periodStart && expenseDate <= periodEnd;
-    });
+    // Usa direttamente le spese già filtrate dal backend tramite dateRange
+    // Non serve filtrare di nuovo, le spese sono già corrette per il periodo selezionato
     
     // Calcola totale per il periodo
-    const totalForPeriod = calculateTotalInCurrency(periodExpenses as ExpenseForCalculation[], selectedCurrency);
+    const totalForPeriod = calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency);
     
     return {
       totalCurrentMonth: totalForPeriod,
       totalPreviousMonth: 0, // Non utilizzato per filtri personalizzati
-      transactionCount: periodExpenses.length,
-      averageAmount: periodExpenses.length > 0 ? totalForPeriod / periodExpenses.length : 0
+      transactionCount: expenses.length,
+      averageAmount: expenses.length > 0 ? totalForPeriod / expenses.length : 0
     };
-  }, [expenses, selectedCurrency, timeFilter]);
+  }, [expenses, selectedCurrency]);
 
   // 📊 CALCOLO TREND MENSILE - Spostato fuori dal useMemo principale
   const monthlyTrend = useMemo(() => {
@@ -233,6 +218,7 @@ function Dashboard() {
   const dailyAverage = useMemo(() => {
     if (!kpis?.totalCurrentMonth) return 0;
     
+    // Calcola i giorni nel periodo selezionato
     const now = new Date();
     let daysInPeriod: number;
     
@@ -242,6 +228,15 @@ function Dashboard() {
         break;
       case 'yoy':
         daysInPeriod = 365; // Anno completo
+        break;
+      case '7d':
+        daysInPeriod = 7;
+        break;
+      case '30d':
+        daysInPeriod = 30;
+        break;
+      case '90d':
+        daysInPeriod = 90;
         break;
       case 'current':
       default:
