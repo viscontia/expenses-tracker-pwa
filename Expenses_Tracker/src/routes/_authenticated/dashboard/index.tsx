@@ -76,7 +76,7 @@ function Dashboard() {
     currentMonthExpenses.forEach(expense => {
       const currentTotal = categoryTotals.get(expense.categoryId) || 0;
       // Usa stessa logica calculateTotalInCurrency per singola spesa
-      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
+      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency || 'EUR');
       categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     });
     
@@ -93,7 +93,34 @@ function Dashboard() {
         };
       });
     
-    return { categoryExpenses, monthlyTrend: [] }; // monthlyTrend vuoto per ora
+    // 📊 CALCOLO TREND MENSILE - Ultimi 6 mesi
+    const monthlyTrend = useMemo(() => {
+      if (!expenses || expenses.length === 0) return [0, 0, 0, 0, 0, 0];
+      
+      const now = new Date();
+      const monthlyTotals: number[] = [];
+      
+      // Calcola totali per gli ultimi 6 mesi (da 5 mesi fa a questo mese)
+      for (let i = 5; i >= 0; i--) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth();
+        
+        // Filtra spese per questo mese specifico
+        const monthExpenses = expenses.filter(expense => {
+          const expenseDate = new Date(expense.date);
+          return expenseDate.getFullYear() === year && expenseDate.getMonth() === month;
+        });
+        
+        // Calcola totale per questo mese nella valuta selezionata
+        const monthTotal = calculateTotalInCurrency(monthExpenses, selectedCurrency || 'EUR');
+        monthlyTotals.push(monthTotal);
+      }
+      
+      return monthlyTotals;
+    }, [expenses, selectedCurrency]);
+    
+    return { categoryExpenses, monthlyTrend };
   }, [expenses, categories, selectedCurrency]);
 
   // Categoria top - dal chartData calcolato
@@ -191,12 +218,26 @@ function Dashboard() {
     },
   };
 
-  // Configurazione grafico lineare (vuoto per ora)
+  // 🏷️ ETICHETTE DINAMICHE - Ultimi 6 mesi reali
+  const monthLabels = useMemo(() => {
+    const now = new Date();
+    const labels: string[] = [];
+    const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+    
+    for (let i = 5; i >= 0; i--) {
+      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      labels.push(monthNames[targetDate.getMonth()]);
+    }
+    
+    return labels;
+  }, []);
+
+  // Configurazione grafico lineare con dati reali
   const lineChartData = {
-    labels: ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu'],
+    labels: monthLabels,
     datasets: [
       {
-        label: `Spese (${selectedCurrency})`,
+        label: `Spese (${selectedCurrency || 'EUR'})`,
         data: chartData?.monthlyTrend || [0, 0, 0, 0, 0, 0],
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
