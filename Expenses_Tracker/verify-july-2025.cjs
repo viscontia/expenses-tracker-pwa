@@ -2,16 +2,16 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-async function verifyJune2025Expenses() {
+async function verifyJuly2025Expenses() {
   try {
-    console.log('🔍 Verifica spese Giugno 2025...\n');
+    console.log('🔍 Verifica spese Luglio 2025...\n');
     
-    // Query 1: Spese di Giugno 2025 (1-30 Giugno)
-    const juneExpenses = await prisma.expense.findMany({
+    // Query 1: Spese di Luglio 2025 (1-31 Luglio)
+    const julyExpenses = await prisma.expense.findMany({
       where: {
         date: {
-          gte: new Date('2025-06-01'),
-          lte: new Date('2025-06-30 23:59:59')
+          gte: new Date('2025-07-01'),
+          lte: new Date('2025-07-31 23:59:59')
         }
       },
       include: {
@@ -22,11 +22,11 @@ async function verifyJune2025Expenses() {
       }
     });
     
-    console.log(`📊 Spese trovate in Giugno 2025: ${juneExpenses.length}`);
+    console.log(`📊 Spese trovate in Luglio 2025: ${julyExpenses.length}`);
     
     // Calcola totali per valuta
     const totalsByCurrency = {};
-    juneExpenses.forEach(expense => {
+    julyExpenses.forEach(expense => {
       if (!totalsByCurrency[expense.currency]) {
         totalsByCurrency[expense.currency] = 0;
       }
@@ -39,11 +39,11 @@ async function verifyJune2025Expenses() {
     });
     
     // Query 2: Spese con conversioni per ZAR
-    const juneExpensesWithRates = await prisma.expense.findMany({
+    const julyExpensesWithRates = await prisma.expense.findMany({
       where: {
         date: {
-          gte: new Date('2025-06-01'),
-          lte: new Date('2025-06-30 23:59:59')
+          gte: new Date('2025-07-01'),
+          lte: new Date('2025-07-31 23:59:59')
         }
       },
       include: {
@@ -57,7 +57,7 @@ async function verifyJune2025Expenses() {
     });
     
     console.log('\n🔄 Spese con tassi di conversione per ZAR:');
-    juneExpensesWithRates.forEach(expense => {
+    julyExpensesWithRates.forEach(expense => {
       if (expense.currency !== 'ZAR') {
         const rate = expense.historicalRates[0];
         if (rate) {
@@ -71,7 +71,7 @@ async function verifyJune2025Expenses() {
     
     // Query 3: Calcolo totale convertito in ZAR
     let totalInZAR = 0;
-    juneExpenses.forEach(expense => {
+    julyExpenses.forEach(expense => {
       if (expense.currency === 'ZAR') {
         totalInZAR += expense.amount;
       } else {
@@ -82,14 +82,14 @@ async function verifyJune2025Expenses() {
       }
     });
     
-    console.log(`\n🎯 TOTALE GIUGNO 2025 IN ZAR: ${totalInZAR.toFixed(2)}`);
+    console.log(`\n🎯 TOTALE LUGLIO 2025 IN ZAR: ${totalInZAR.toFixed(2)}`);
     
     // Query 4: Verifica date range esatto
     const dateRange = await prisma.expense.findMany({
       where: {
         date: {
-          gte: new Date('2025-06-01'),
-          lte: new Date('2025-06-30 23:59:59')
+          gte: new Date('2025-07-01'),
+          lte: new Date('2025-07-31 23:59:59')
         }
       },
       select: {
@@ -102,10 +102,28 @@ async function verifyJune2025Expenses() {
       }
     });
     
-    console.log('\n📅 Range date Giugno 2025:');
+    console.log('\n📅 Range date Luglio 2025:');
     if (dateRange.length > 0) {
       console.log(`  Prima spesa: ${dateRange[0].date.toISOString()}`);
       console.log(`  Ultima spesa: ${dateRange[dateRange.length - 1].date.toISOString()}`);
+    }
+    
+    // Query 5: Confronto con i valori riportati
+    console.log('\n📊 CONFRONTO VALORI:');
+    console.log(`  Dashboard: R 103.970,72`);
+    console.log(`  Elenco Spese: R 28.307,60`);
+    console.log(`  Database (VERO): R ${totalInZAR.toFixed(2)}`);
+    
+    if (Math.abs(totalInZAR - 103970.72) < 0.01) {
+      console.log('  ✅ Dashboard CORRETTO');
+    } else {
+      console.log('  ❌ Dashboard ERRATO');
+    }
+    
+    if (Math.abs(totalInZAR - 28307.60) < 0.01) {
+      console.log('  ✅ Elenco Spese CORRETTO');
+    } else {
+      console.log('  ❌ Elenco Spese ERRATO');
     }
     
   } catch (error) {
@@ -115,4 +133,4 @@ async function verifyJune2025Expenses() {
   }
 }
 
-verifyJune2025Expenses(); 
+verifyJuly2025Expenses(); 

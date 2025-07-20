@@ -102,7 +102,12 @@ function Dashboard() {
         };
       case 'current':
       default:
-        return { start: undefined, end: undefined };
+        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        return {
+          start: startOfCurrentMonth.toISOString(),
+          end: endOfCurrentMonth.toISOString()
+        };
     }
   }, [timeFilter]);
   
