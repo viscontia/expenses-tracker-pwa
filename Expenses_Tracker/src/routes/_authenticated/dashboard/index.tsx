@@ -88,7 +88,7 @@ function Dashboard() {
         };
       case 'previous':
         const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
         return {
           start: startOfPreviousMonth.toISOString(),
           end: endOfPreviousMonth.toISOString()
@@ -117,8 +117,9 @@ function Dashboard() {
   // 🔍 DEBUG: Log per verificare le spese caricate
   console.log('🔍 Dashboard Debug - timeFilter:', timeFilter);
   console.log('🔍 Dashboard Debug - dateRange:', dateRange);
+  console.log('🔍 Dashboard Debug - dateRange start:', dateRange.start);
+  console.log('🔍 Dashboard Debug - dateRange end:', dateRange.end);
   console.log('🔍 Dashboard Debug - expensesCount:', expenses.length);
-  console.log('🔍 Dashboard Debug - expensesDates:', expenses.map(e => ({ date: e.date, amount: e.amount, currency: e.currency })));
   console.log('🔍 Dashboard Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency));
   console.log('🔍 Dashboard Debug - selectedCurrency:', selectedCurrency);
   
