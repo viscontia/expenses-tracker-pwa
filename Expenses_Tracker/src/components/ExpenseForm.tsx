@@ -49,6 +49,9 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
   const token = useAuthStore((state) => state.token);
   const defaultCurrency = useAuthStore((state) => state.user?.preferences?.defaultCurrency);
   
+  // Utils for cache invalidation
+  const utils = trpc.useUtils();
+  
   // Get categories from backend
   const { data: categories, isLoading: categoriesLoading } = trpc.categories.getAll.useQuery(
     undefined,
@@ -81,9 +84,9 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
           // Reset della form per nuovo inserimento
           setFormData({
             amount: '',
-            currency: formData.currency, // Mantieni la valuta selezionata
+            currency: (formData.currency ?? 'EUR'), // Mantieni la valuta selezionata con fallback
             categoryId: '',
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toISOString().split('T')[0] || new Date().toISOString().slice(0, 10),
             description: '',
             conversionRate: undefined,
           });
@@ -111,6 +114,9 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     onSuccess: () => {
       console.log('✅ [ExpenseForm] Expense updated successfully!');
       setIsSubmitted(true);
+      
+      // 🔄 INVALIDATE CACHE - Aggiorna l'elenco spese quando si torna indietro
+      utils.expenses.getExpenses.invalidate();
       
       setTimeout(() => {
         console.log('🔄 [ExpenseForm] Navigating to expenses list...');
@@ -205,7 +211,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
         currency: existingExpense.currency,
         categoryId: existingExpense.categoryId.toString(),
         date: new Date(existingExpense.date).toISOString().split('T')[0],
-        description: existingExpense.description?.toString() || '',
+        description: String(existingExpense.description || ''),
         conversionRate: existingExpense.conversionRate, // Preserva il tasso storico
       });
     }
@@ -438,45 +444,20 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
       throw new Error('Form validation failed');
     }
 
-    return new Promise((resolve, reject) => {
-      const originalOnSuccess = mode === 'insert' ? 
-        createExpenseMutation.originalOptions?.onSuccess : 
-        updateExpenseMutation.originalOptions?.onSuccess;
+    const expenseData = {
+      categoryId: parseInt(formData.categoryId),
+      amount: parseFloat(formData.amount),
+      currency: formData.currency as 'ZAR' | 'EUR',
+      conversionRate: formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1),
+      date: new Date(formData.date).toISOString(),
+      description: formData.description || undefined,
+    };
 
-      const tempMutation = mode === 'insert' ? createExpenseMutation : updateExpenseMutation;
-      
-      // Temporarily override onSuccess to resolve our promise
-      const expenseData = {
-        categoryId: parseInt(formData.categoryId),
-        amount: parseFloat(formData.amount),
-        currency: formData.currency as 'ZAR' | 'EUR',
-        conversionRate: formData.currency === 'EUR' ? 1 : (exchangeRate?.rate || 1),
-        date: new Date(formData.date).toISOString(),
-        description: formData.description || undefined,
-      };
-
-      if (mode === 'insert') {
-        createExpenseMutation.mutate(expenseData, {
-          onSuccess: () => {
-            resolve();
-            originalOnSuccess?.();
-          },
-          onError: (error) => {
-            reject(error);
-          }
-        });
-      } else {
-        updateExpenseMutation.mutate({ id: expenseId!, ...expenseData }, {
-          onSuccess: () => {
-            resolve();
-            originalOnSuccess?.();
-          },
-          onError: (error) => {
-            reject(error);
-          }
-        });
-      }
-    });
+    if (mode === 'insert') {
+      await createExpenseMutation.mutateAsync(expenseData);
+    } else {
+      await updateExpenseMutation.mutateAsync({ id: expenseId!, ...expenseData });
+    }
   };
 
   // Unsaved changes guard
