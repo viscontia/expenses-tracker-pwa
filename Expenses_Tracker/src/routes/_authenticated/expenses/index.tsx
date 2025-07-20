@@ -244,15 +244,15 @@ function ExpensesPage() {
         summaryCurrency,
         expense.category?.name || '',
         expense.conversionRate || 1,
-        // Formatta il numero con 2 decimali e mantieni il punto come separatore decimale per CSV
-        amountInEUR.toFixed(2)
+        // Numero senza formattazione - solo il valore numerico
+        amountInEUR
       ];
     });
 
-    // Crea contenuto CSV
+    // Crea contenuto CSV con separatore punto e virgola
     const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+      headers.join(';'),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(';'))
     ].join('\n');
 
     // Genera nome file con timestamp
