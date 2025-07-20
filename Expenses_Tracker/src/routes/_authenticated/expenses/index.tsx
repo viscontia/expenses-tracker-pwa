@@ -225,16 +225,29 @@ function ExpensesPage() {
     ];
 
     // Dati CSV
-    const csvData = filteredExpenses.map(expense => [
-      expense.id,
-      new Date(expense.date).toLocaleDateString('it-IT'),
-      expense.description || '',
-      calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency),
-      summaryCurrency,
-      expense.category?.name || '',
-      expense.conversionRate || 1,
-      expense.currency === 'EUR' ? expense.amount : (expense.amount / (expense.conversionRate || 1))
-    ]);
+    const csvData = filteredExpenses.map(expense => {
+      // Calcola l'importo in EUR con formattazione corretta
+      const amountInEUR = expense.currency === 'EUR' ? 
+        expense.amount : 
+        (expense.amount / (expense.conversionRate || 1));
+      
+      // Controllo di sicurezza per evitare valori anomali
+      if (amountInEUR > 1000000) {
+        console.warn(`⚠️ Valore EUR anomalo per spesa ${expense.id}: ${amountInEUR}`);
+      }
+      
+      return [
+        expense.id,
+        new Date(expense.date).toLocaleDateString('it-IT'),
+        expense.description || '',
+        calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency),
+        summaryCurrency,
+        expense.category?.name || '',
+        expense.conversionRate || 1,
+        // Formatta il numero con 2 decimali e mantieni il punto come separatore decimale per CSV
+        amountInEUR.toFixed(2)
+      ];
+    });
 
     // Crea contenuto CSV
     const csvContent = [
