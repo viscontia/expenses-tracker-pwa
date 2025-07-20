@@ -6,9 +6,11 @@ import { ResponsiveTable } from '~/components/ResponsiveTable';
 import { RateIndicator } from '~/components/RateIndicator';
 import { ExpenseDetailTable } from '~/components/ExpenseDetailTable';
 import { ResponsiveModal } from '~/components/ResponsiveModal';
-import { Calendar, Filter, Search, Eye, Edit2, Trash2, X } from 'lucide-react';
+import { Calendar, Filter, Search, Eye, Edit2, Trash2, X, FileText, Download } from 'lucide-react';
 import { formatCurrency } from '~/utils/formatters';
 import { usePersistedFilters } from '~/hooks/usePersistedFilters';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Available currencies for summary
 const CURRENCIES = [
@@ -204,6 +206,136 @@ function ExpensesPage() {
     expense.description?.toLowerCase().includes(activeFilters.searchTerm.toLowerCase()) ||
     expense.category.name.toLowerCase().includes(activeFilters.searchTerm.toLowerCase())
   );
+
+  // 📊 FUNZIONI DI ESPORTAZIONE
+  const exportToCSV = useCallback(() => {
+    if (!filteredExpenses.length) {
+      alert('Nessuna spesa da esportare');
+      return;
+    }
+
+    // Intestazioni CSV
+    const headers = [
+      'ID',
+      'Data',
+      'Descrizione',
+      'Importo',
+      'Valuta',
+      'Categoria',
+      'Tasso di Cambio',
+      'Importo in EUR'
+    ];
+
+    // Dati CSV
+    const csvData = filteredExpenses.map(expense => [
+      expense.id,
+      new Date(expense.date).toLocaleDateString('it-IT'),
+      expense.description || '',
+      expense.amount,
+      expense.currency,
+      expense.category?.name || '',
+      expense.conversionRate || 1,
+      expense.currency === 'EUR' ? expense.amount : (expense.amount / (expense.conversionRate || 1))
+    ]);
+
+    // Crea contenuto CSV
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Genera nome file con timestamp
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const fileName = `spese_${timestamp}.csv`;
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [filteredExpenses]);
+
+  const exportToPDF = useCallback(() => {
+    if (!filteredExpenses.length) {
+      alert('Nessuna spesa da esportare');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      
+      // Titolo
+      doc.setFontSize(18);
+      doc.text('Elenco Spese', 14, 22);
+      
+      // Informazioni sui filtri
+      doc.setFontSize(10);
+      let yPosition = 35;
+      
+      if (activeFilters.searchTerm) {
+        doc.text(`Ricerca: "${activeFilters.searchTerm}"`, 14, yPosition);
+        yPosition += 7;
+      }
+      
+      if (activeFilters.selectedCategory) {
+        const categoryName = categories?.find(c => c.id === activeFilters.selectedCategory)?.name;
+        doc.text(`Categoria: ${categoryName}`, 14, yPosition);
+        yPosition += 7;
+      }
+      
+      if (activeFilters.dateRange.start || activeFilters.dateRange.end) {
+        const dateRange = `${activeFilters.dateRange.start ? new Date(activeFilters.dateRange.start).toLocaleDateString('it-IT') : ''} - ${activeFilters.dateRange.end ? new Date(activeFilters.dateRange.end).toLocaleDateString('it-IT') : ''}`;
+        doc.text(`Periodo: ${dateRange}`, 14, yPosition);
+        yPosition += 7;
+      }
+      
+      // Riepilogo
+      const totalAmount = calculateTotalInCurrency(filteredExpenses, summaryCurrency);
+      doc.text(`Totale: ${formatCurrency(totalAmount, summaryCurrency)} (${filteredExpenses.length} spese)`, 14, yPosition);
+      yPosition += 15;
+      
+      // Tabella
+      const tableData = filteredExpenses.map(expense => [
+        new Date(expense.date).toLocaleDateString('it-IT'),
+        expense.description || '',
+        `${expense.amount} ${expense.currency}`,
+        expense.category?.name || '',
+        expense.conversionRate ? `${expense.conversionRate}` : '1'
+      ]);
+      
+      autoTable(doc, {
+        head: [['Data', 'Descrizione', 'Importo', 'Categoria', 'Tasso']],
+        body: tableData,
+        startY: yPosition,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2
+        },
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: 255
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        }
+      });
+      
+      // Genera nome file con timestamp
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const fileName = `spese_${timestamp}.pdf`;
+      
+      // Download file
+      doc.save(fileName);
+    } catch (error) {
+      console.error('Errore durante l\'esportazione PDF:', error);
+      alert('Errore durante l\'esportazione PDF. Verifica che jsPDF sia installato correttamente.');
+    }
+  }, [filteredExpenses, activeFilters, categories, summaryCurrency]);
 
   const handleViewDetails = (categoryName: string, categoryExpenses: any[]) => {
     setSelectedExpenses(categoryExpenses);
@@ -456,6 +588,31 @@ function ExpensesPage() {
               Reset
             </button>
           </div>
+
+          {/* 📊 PULSANTI ESPORTAZIONE */}
+          {filteredExpenses.length > 0 && (
+            <div className="flex space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <span className="text-sm text-gray-500 dark:text-gray-400 self-center">Esporta:</span>
+              
+              <button
+                onClick={exportToCSV}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                title="Esporta in formato CSV"
+              >
+                <FileText className="h-4 w-4" />
+                CSV
+              </button>
+              
+              <button
+                onClick={exportToPDF}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                title="Esporta in formato PDF"
+              >
+                <Download className="h-4 w-4" />
+                PDF
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 📊 FILTRI ATTIVI - Indicatori visivi */}

@@ -103,7 +103,7 @@ function Dashboard() {
   // ✅ CALCOLI KPI FRONTEND - Stessa logica dell'elenco spese
   const kpis = useMemo(() => {
     if (!expenses.length) return null;
-    return calculateKPIsForPeriod(expenses as ExpenseForCalculation[], selectedCurrency || 'EUR');
+    return calculateKPIsForPeriod(expenses as ExpenseForCalculation[], selectedCurrency);
   }, [expenses, selectedCurrency]);
 
   // 📊 CALCOLO TREND MENSILE - Spostato fuori dal useMemo principale
@@ -126,7 +126,7 @@ function Dashboard() {
       });
       
       // Calcola totale per questo mese nella valuta selezionata
-      const monthTotal = calculateTotalInCurrency(monthExpenses, selectedCurrency || 'EUR');
+      const monthTotal = calculateTotalInCurrency(monthExpenses, selectedCurrency);
       monthlyTotals.push(monthTotal);
     }
     
@@ -152,7 +152,7 @@ function Dashboard() {
     currentMonthExpenses.forEach(expense => {
       const currentTotal = categoryTotals.get(expense.categoryId) || 0;
       // Usa stessa logica calculateTotalInCurrency per singola spesa
-      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency || 'EUR');
+      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
       categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     });
     
@@ -224,7 +224,7 @@ function Dashboard() {
     const categoryTotals = new Map<number, number>();
     prevMonthExpenses.forEach(expense => {
       const currentTotal = categoryTotals.get(expense.categoryId) || 0;
-      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency || 'EUR');
+      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
       categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     });
     
@@ -333,7 +333,7 @@ function Dashboard() {
             const value = context.parsed;
             const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
             const percentage = formatNumber((value / total) * 100, 1);
-            return `${context.label}: ${formatCurrency(value, selectedCurrency || 'EUR')} (${percentage}%)`;
+            return `${context.label}: ${formatCurrency(value, selectedCurrency ?? 'EUR')} (${percentage}%)`;
           }
         }
       }
@@ -345,7 +345,7 @@ function Dashboard() {
     labels: monthLabels,
     datasets: [
       {
-        label: `Spese (${selectedCurrency || 'EUR'})`,
+        label: `Spese (${selectedCurrency ?? 'EUR'})`,
         data: chartData?.monthlyTrend || [0, 0, 0, 0, 0, 0],
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -473,7 +473,7 @@ function Dashboard() {
             <div>
               <p className="text-sm font-medium text-gray-400">Spese {currentMonthLabel}</p>
               <p className="text-2xl font-bold text-white">
-                {formatCurrency(kpis?.totalCurrentMonth || 0, selectedCurrency || 'EUR')}
+                {formatCurrency(kpis?.totalCurrentMonth || 0, selectedCurrency ?? 'EUR')}
               </p>
               <p className={`text-sm ${monthOverMonthChange && monthOverMonthChange >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {monthOverMonthChange !== null ? `${monthOverMonthChange >= 0 ? '+' : ''}${formatNumber(monthOverMonthChange, 1)}% dal mese scorso` : ''}
@@ -524,8 +524,8 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Grafici */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      {/* Grafici - Layout riorganizzato: 2 grafici per riga */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 1. Donut Chart - Spese per Categoria */}
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -586,9 +586,9 @@ function Dashboard() {
                   }
                 },
                 onClick: (event, elements) => {
-                  if (elements.length > 0) {
+                  if (elements.length > 0 && chartData?.categoryExpenses) {
                     const index = elements[0].index;
-                    const categoryId = chartData?.categoryExpenses?.[index]?.id;
+                    const categoryId = chartData.categoryExpenses[index]?.id;
                     if (categoryId) handleCategoryClick(categoryId);
                   }
                 }
@@ -615,7 +615,7 @@ function Dashboard() {
               data={{
                 labels: chartData?.categoryExpenses?.map(cat => cat.name) || [],
                 datasets: [{
-                  label: `Importo (${selectedCurrency || 'EUR'})`,
+                  label: `Importo (${selectedCurrency ?? 'EUR'})`,
                   data: chartData?.categoryExpenses?.map(cat => cat.amount) || [],
                   backgroundColor: chartData?.categoryExpenses?.map((_, index) => [
                     '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
@@ -669,9 +669,9 @@ function Dashboard() {
                   },
                 },
                 onClick: (event, elements) => {
-                  if (elements.length > 0) {
+                  if (elements.length > 0 && chartData?.categoryExpenses) {
                     const index = elements[0].index;
-                    const categoryId = chartData?.categoryExpenses?.[index]?.id;
+                    const categoryId = chartData.categoryExpenses[index]?.id;
                     if (categoryId) handleCategoryClick(categoryId);
                   }
                 }
@@ -680,7 +680,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 3. Grouped Bar Chart - Confronto Mese Corrente vs Precedente */}
+        {/* 3. Grouped Bar Chart - Confronto Mese Corrente vs Precedente (spostato sulla seconda riga) */}
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Confronto Mensile</h3>
@@ -761,9 +761,9 @@ function Dashboard() {
                   },
                 },
                 onClick: (event, elements) => {
-                  if (elements.length > 0) {
+                  if (elements.length > 0 && chartData?.categoryExpenses) {
                     const index = elements[0].index;
-                    const categoryId = chartData?.categoryExpenses?.[index]?.id;
+                    const categoryId = chartData.categoryExpenses[index]?.id;
                     if (categoryId) handleCategoryClick(categoryId);
                   }
                 }
@@ -772,8 +772,8 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 4. Grafico Lineare - Trend Mensile */}
-        <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6 xl:col-span-2">
+        {/* 4. Grafico Lineare - Trend Mensile (ora con spazio proporzionato) */}
+        <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Trend Mensile</h3>
             <button 
