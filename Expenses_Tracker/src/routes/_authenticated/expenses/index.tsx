@@ -6,9 +6,10 @@ import { ResponsiveTable } from '~/components/ResponsiveTable';
 import { RateIndicator } from '~/components/RateIndicator';
 import { ExpenseDetailTable } from '~/components/ExpenseDetailTable';
 import { ResponsiveModal } from '~/components/ResponsiveModal';
-import { Calendar, Filter, Search, Eye, Edit2, Trash2, X, FileText, Download } from 'lucide-react';
+import { Calendar, Filter, Search, Eye, Edit2, Trash2, X, FileText, Download, Globe } from 'lucide-react';
 import { formatCurrency } from '~/utils/formatters';
 import { usePersistedFilters } from '~/hooks/usePersistedFilters';
+import { calculateTotalInCurrency, ExpenseForCalculation } from '~/utils/currencyCalculations';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -149,6 +150,9 @@ function ExpensesPage() {
 
   // Fetch categories for filter
   const { data: categories } = trpc.categories.getAll.useQuery();
+  
+  // Fetch available currencies for display
+  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
 
   // Delete expense mutation
   const deleteExpenseMutation = trpc.expenses.deleteExpense.useMutation({
@@ -166,34 +170,6 @@ function ExpensesPage() {
   });
 
   const expenses = expensesData?.expenses || [];
-
-  // Function to calculate total in specific currency
-  const calculateTotalInCurrency = (expenses: any[], targetCurrency: string): number => {
-    return expenses.reduce((total, expense) => {
-      const { amount, currency, conversionRate } = expense;
-      
-      if (currency === targetCurrency) {
-        // Same currency - use amount directly
-        return total + amount;
-      } else if (currency === 'EUR' && targetCurrency !== 'EUR') {
-        // Converting FROM EUR TO other currency
-        // We need the reverse rate (EUR to target)
-        // This requires a current exchange rate query - for now use 1/conversionRate as approximation
-        return total + (amount / conversionRate);
-      } else if (currency !== 'EUR' && targetCurrency === 'EUR') {
-        // Converting TO EUR from other currency (most common case)
-        // Use the stored conversionRate (originalCurrency -> EUR)
-        return total + (amount / conversionRate);
-      } else {
-        // Converting between two non-EUR currencies
-        // First convert to EUR, then to target currency
-        // This is complex and requires current rates - for now convert via EUR
-        const eurAmount = amount / conversionRate;
-        // This is a simplification - in reality we'd need current EUR->target rate
-        return total + eurAmount; // Fallback to EUR equivalent
-      }
-    }, 0);
-  };
 
   // Function to check if any conversions are needed
   const hasConversions = (expenses: any[], targetCurrency: string): boolean => {
@@ -247,8 +223,8 @@ function ExpensesPage() {
       expense.id,
       new Date(expense.date).toLocaleDateString('it-IT'),
       expense.description || '',
-      expense.amount,
-      expense.currency,
+      calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency),
+      summaryCurrency,
       expense.category?.name || '',
       expense.conversionRate || 1,
       expense.currency === 'EUR' ? expense.amount : (expense.amount / (expense.conversionRate || 1))
@@ -319,7 +295,7 @@ function ExpensesPage() {
       const tableData = filteredExpenses.map(expense => [
         new Date(expense.date).toLocaleDateString('it-IT'),
         expense.description || '',
-        `${expense.amount} ${expense.currency}`,
+        `${formatCurrency(calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency), summaryCurrency)}`,
         expense.category?.name || '',
         expense.conversionRate ? `${expense.conversionRate}` : '1'
       ]);
@@ -395,8 +371,11 @@ function ExpensesPage() {
     {
       key: 'amount',
       label: 'Importo',
-      render: (value: number, row: any) => 
-        formatCurrency(value, row.currency),
+      render: (value: number, row: any) => {
+        // Calcola l'importo convertito nella valuta selezionata
+        const convertedAmount = calculateTotalInCurrency([row as ExpenseForCalculation], summaryCurrency);
+        return formatCurrency(convertedAmount, summaryCurrency);
+      },
     },
     {
       key: 'conversionRate',
@@ -453,6 +432,23 @@ function ExpensesPage() {
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Tutte le Spese</h1>
+        
+        {/* Controllo valuta */}
+        <div className="flex items-center gap-2">
+          <Globe className="w-5 h-5 text-gray-400" />
+          <span className="text-sm text-gray-400">Valuta</span>
+          <select
+            value={summaryCurrency}
+            onChange={(e) => setSummaryCurrency(e.target.value)}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {availableCurrencies?.map((currency) => (
+              <option key={currency.code} value={currency.code}>
+                {currency.symbol} {currency.code}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Filters */}
@@ -687,22 +683,6 @@ function ExpensesPage() {
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Riepilogo
           </h3>
-          
-          {/* Currency Selector for Summary */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-500 dark:text-gray-400">Valuta:</label>
-            <select
-              value={summaryCurrency}
-              onChange={(e) => setSummaryCurrency(e.target.value)}
-              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-1 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {CURRENCIES.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.symbol} {currency.code}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -717,8 +697,7 @@ function ExpensesPage() {
               Importo Totale ({summaryCurrency})
             </p>
             <p className="text-xl font-bold text-gray-900 dark:text-white">
-              {CURRENCIES.find(c => c.code === summaryCurrency)?.symbol}
-                              {formatCurrency(calculateTotalInCurrency(filteredExpenses, summaryCurrency), summaryCurrency)}
+              {formatCurrency(calculateTotalInCurrency(filteredExpenses as ExpenseForCalculation[], summaryCurrency), summaryCurrency)}
             </p>
             {hasConversions(filteredExpenses, summaryCurrency) && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
