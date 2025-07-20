@@ -301,12 +301,37 @@ function ExpensesPage() {
           groupedExpenses.get(categoryName)!.push(expense);
         });
 
-        // Crea dati tabella con rotture di controllo
+        // Crea dati tabella con rotture di controllo e gestione salti pagina
         const tableData: any[] = [];
+        let currentY = yPosition;
+        const pageHeight = doc.internal.pageSize.height;
+        const rowHeight = 12; // Altezza stimata per riga
+        const minSpaceForGroup = 8 * rowHeight; // Spazio minimo per un gruppo completo
         
         groupedExpenses.forEach((categoryExpenses, categoryName) => {
           // Calcola totale per categoria
           const categoryTotal = calculateTotalInCurrency(categoryExpenses as ExpenseForCalculation[], summaryCurrency);
+          
+          // Calcola spazio necessario per questo gruppo
+          const groupRows = 1 + categoryExpenses.length + 2; // header + spese + totale + riga vuota
+          const spaceNeeded = groupRows * rowHeight;
+          
+          // Se non c'è spazio sufficiente, aggiungi un salto pagina
+          if (currentY + spaceNeeded > pageHeight - 50) {
+            tableData.push([
+              {
+                content: '',
+                colSpan: 5,
+                styles: {
+                  fillColor: [255, 255, 255],
+                  textColor: 0,
+                  fontSize: 1
+                }
+              }
+            ]);
+            // Forza salto pagina
+            currentY = 20;
+          }
           
           // Aggiungi header categoria
           tableData.push([
@@ -321,6 +346,7 @@ function ExpensesPage() {
               }
             }
           ]);
+          currentY += rowHeight;
           
           // Aggiungi spese della categoria
           categoryExpenses.forEach(expense => {
@@ -331,6 +357,7 @@ function ExpensesPage() {
               expense.category?.name || '',
               expense.conversionRate ? `${expense.conversionRate}` : '1'
             ]);
+            currentY += rowHeight;
           });
           
           // Aggiungi totale categoria
@@ -346,6 +373,7 @@ function ExpensesPage() {
               }
             }
           ]);
+          currentY += rowHeight;
           
           // Aggiungi riga vuota dopo il totale categoria per leggibilità
           tableData.push([
@@ -359,6 +387,7 @@ function ExpensesPage() {
               }
             }
           ]);
+          currentY += rowHeight;
         });
         
         // Aggiungi riga del totale generale alla fine
@@ -390,6 +419,7 @@ function ExpensesPage() {
           alternateRowStyles: {
             fillColor: [248, 250, 252]
           },
+          // Gestione salti pagina per evitare testate orfane
           didParseCell: function(data) {
             // Gestisci righe con colSpan (header categoria e totali)
             if (data.cell.colSpan && data.cell.colSpan > 1) {
@@ -406,6 +436,16 @@ function ExpensesPage() {
               if (data.cell.styles.fontSize) {
                 data.cell.styles.fontSize = data.cell.styles.fontSize;
               }
+            }
+          },
+          // Gestione salti pagina intelligenti
+          pageBreak: 'auto',
+          margin: { top: 20, right: 20, bottom: 20, left: 20 },
+          // Forza salto pagina se necessario
+          didDrawPage: function(data) {
+            // Aggiungi margine extra per evitare testate orfane
+            if (data.cursor && data.cursor.y) {
+              data.cursor.y = Math.max(data.cursor.y, 30);
             }
           }
         });
