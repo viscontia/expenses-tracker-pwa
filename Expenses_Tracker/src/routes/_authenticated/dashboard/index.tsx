@@ -37,7 +37,7 @@ function Dashboard() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>(defaultCurrency || 'EUR');
   
   // 📅 FILTRI TEMPORALI - Nuovi stati per interattività
-  const [timeFilter, setTimeFilter] = useState<'7d' | '30d' | '90d' | 'mom' | 'ytd' | 'current'>('current');
+  const [timeFilter, setTimeFilter] = useState<'7d' | '30d' | '90d' | 'mom' | 'ytd' | 'current' | 'previous' | 'yoy'>('current');
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   
   // ✅ SYNC VALUTA - Stessa logica elenco spese per aggiornamenti settings
@@ -85,6 +85,20 @@ function Dashboard() {
         return {
           start: startOfYear.toISOString(),
           end: today.toISOString()
+        };
+      case 'previous':
+        const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+        return {
+          start: startOfPreviousMonth.toISOString(),
+          end: endOfPreviousMonth.toISOString()
+        };
+      case 'yoy':
+        const startOfLastYear = new Date(now.getFullYear() - 1, 0, 1);
+        const endOfLastYear = new Date(now.getFullYear() - 1, 11, 31);
+        return {
+          start: startOfLastYear.toISOString(),
+          end: endOfLastYear.toISOString()
         };
       case 'current':
       default:
@@ -243,7 +257,7 @@ function Dashboard() {
     setSelectedCurrency(e.target.value);
   }, []);
 
-  const handleTimeFilterChange = useCallback((filter: '7d' | '30d' | '90d' | 'mom' | 'ytd' | 'current') => {
+  const handleTimeFilterChange = useCallback((filter: '7d' | '30d' | '90d' | 'mom' | 'ytd' | 'current' | 'previous' | 'yoy') => {
     setTimeFilter(filter);
   }, []);
 
@@ -417,7 +431,9 @@ function Dashboard() {
               <option value="30d">Ultimi 30 giorni</option>
               <option value="90d">Ultimi 90 giorni</option>
               <option value="mom">MoM (2 mesi)</option>
+              <option value="previous">Mese Precedente</option>
               <option value="ytd">Year to Date</option>
+              <option value="yoy">YoY (Anno Precedente)</option>
             </select>
           </div>
 
