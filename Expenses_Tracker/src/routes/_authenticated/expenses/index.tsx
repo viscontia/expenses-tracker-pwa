@@ -200,12 +200,28 @@ function ExpensesPage() {
     return expenses.some(expense => expense.currency !== targetCurrency);
   };
 
-  // Filter expenses by search term
-  const filteredExpenses = expenses.filter(expense => 
-    !activeFilters.searchTerm || 
-    expense.description?.toLowerCase().includes(activeFilters.searchTerm.toLowerCase()) ||
-    expense.category.name.toLowerCase().includes(activeFilters.searchTerm.toLowerCase())
-  );
+  // Filter expenses by search term and sort by category and date ASC
+  const filteredExpenses = expenses
+    .filter(expense => 
+      !activeFilters.searchTerm || 
+      expense.description?.toLowerCase().includes(activeFilters.searchTerm.toLowerCase()) ||
+      expense.category.name.toLowerCase().includes(activeFilters.searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Prima ordina per categoria (alfabetico)
+      const categoryA = a.category?.name || '';
+      const categoryB = b.category?.name || '';
+      const categoryComparison = categoryA.localeCompare(categoryB, 'it');
+      
+      // Se le categorie sono uguali, ordina per data ASC
+      if (categoryComparison === 0) {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateA - dateB;
+      }
+      
+      return categoryComparison;
+    });
 
   // 📊 FUNZIONI DI ESPORTAZIONE
   const exportToCSV = useCallback(() => {
