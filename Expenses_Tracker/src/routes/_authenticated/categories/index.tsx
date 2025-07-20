@@ -40,6 +40,7 @@ function Categories() {
   const [isIconModalOpen, setIsIconModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [iconSearch, setIconSearch] = useState("");
   const [availableIcons, setAvailableIcons] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -73,9 +74,22 @@ function Categories() {
     onSuccess: () => {
       utils.categories.getAll.invalidate();
       setDeletingCategoryId(null);
+      setDeleteError(null);
     },
-    onError: () => {
+    onError: (error) => {
       setDeletingCategoryId(null);
+      
+      // Gestione specifica degli errori
+      if (error.data?.code === 'CONFLICT') {
+        setDeleteError("Non puoi eliminare questa categoria perché è utilizzata in alcune spese. Elimina prima le spese associate.");
+      } else if (error.data?.code === 'NOT_FOUND') {
+        setDeleteError("Categoria non trovata.");
+      } else {
+        setDeleteError("Errore durante l'eliminazione della categoria. Riprova.");
+      }
+      
+      // Auto-hide errore dopo 5 secondi
+      setTimeout(() => setDeleteError(null), 5000);
     },
   });
 
@@ -216,8 +230,13 @@ function Categories() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm("Sei sicuro di voler eliminare questa categoria?")) {
+    // Previeni doppi click
+    if (deletingCategoryId === id || deleteMutation.isPending) return;
+    
+    const categoryName = categories?.find(cat => cat.id === id)?.name || 'questa categoria';
+    if (confirm(`Sei sicuro di voler eliminare "${categoryName}"?\n\nATTENZIONE: Non potrai eliminarla se è utilizzata in alcune spese.`)) {
       setDeletingCategoryId(id);
+      setDeleteError(null); // Reset errori precedenti
       deleteMutation.mutate({ id });
     }
   };
@@ -254,6 +273,25 @@ function Categories() {
         </button>
       </div>
 
+      {/* Messaggio di errore per cancellazione */}
+      {deleteError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <LucideIcons.AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-red-800 mb-1">
+              Impossibile eliminare la categoria
+            </h3>
+            <p className="text-sm text-red-700">{deleteError}</p>
+          </div>
+          <button
+            onClick={() => setDeleteError(null)}
+            className="text-red-400 hover:text-red-600 flex-shrink-0"
+          >
+            <LucideIcons.X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {categories?.map((category) => {
@@ -286,8 +324,9 @@ function Categories() {
                   </button>
                   <button
                     onClick={() => handleDelete(category.id)}
-                    disabled={deletingCategoryId === category.id}
+                    disabled={deletingCategoryId === category.id || deleteMutation.isPending}
                     className="text-red-600 hover:text-red-800 p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={deletingCategoryId === category.id ? "Eliminazione in corso..." : "Elimina categoria"}
                   >
                     {deletingCategoryId === category.id ? (
                       <LucideIcons.Loader2 size={16} className="animate-spin" />

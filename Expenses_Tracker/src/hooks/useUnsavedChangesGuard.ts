@@ -62,7 +62,7 @@ export function useUnsavedChangesGuard<T = any>({
   // Serializza i dati per il confronto
   const serializeData = useCallback((data: T): string => {
     try {
-      return JSON.stringify(data, Object.keys(data as any).sort());
+      return JSON.stringify(data, Object.keys(data as Record<string, unknown>).sort());
     } catch {
       return '';
     }

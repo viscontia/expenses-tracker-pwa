@@ -5,6 +5,7 @@ export interface ExpenseForCalculation {
   amount: number;
   currency: string;
   conversionRate: number;
+  date: Date | string; // Supporta sia Date che string per flessibilità
 }
 
 /**
@@ -48,7 +49,7 @@ export const hasConversions = (expenses: ExpenseForCalculation[], targetCurrency
 /**
  * Filtra spese per periodo - utility per dashboard
  */
-export const filterExpensesByPeriod = (expenses: any[], startDate: Date, endDate: Date): any[] => {
+export const filterExpensesByPeriod = (expenses: ExpenseForCalculation[], startDate: Date, endDate: Date): ExpenseForCalculation[] => {
   return expenses.filter(expense => {
     const expenseDate = new Date(expense.date);
     return expenseDate >= startDate && expenseDate <= endDate;

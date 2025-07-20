@@ -158,9 +158,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         
         const me = await client.auth.getCurrentUser.query();
         get().setUser(me as User | null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Se il token è invalido o l'utente non esiste, rimuoviamo il token
-        if (error?.data?.code === 'UNAUTHORIZED') {
+        if (error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object' && 'code' in error.data && error.data.code === 'UNAUTHORIZED') {
           localStorage.removeItem('token');
           set({ token: null });
         }

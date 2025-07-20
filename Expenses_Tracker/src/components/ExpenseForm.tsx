@@ -118,7 +118,9 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
 
   // Nuovo stato per il dropdown delle categorie
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchTerm, setCategorySearchTerm] = useState('');
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const categorySearchRef = useRef<HTMLInputElement>(null);
 
   // Funzione per ottenere il componente icona
   const getIconComponent = (iconName: string) => {
@@ -128,6 +130,18 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
 
   // Trova la categoria selezionata
   const selectedCategory = categories?.find(cat => cat.id.toString() === formData.categoryId);
+
+  // Filtra le categorie in base al termine di ricerca
+  const filteredCategories = useMemo(() => {
+    if (!categories) return [];
+    if (!categorySearchTerm.trim()) return categories;
+    
+    const searchLower = categorySearchTerm.toLowerCase();
+    return categories.filter(category => 
+      category.name.toLowerCase().includes(searchLower) ||
+      (category.description && category.description.toLowerCase().includes(searchLower))
+    );
+  }, [categories, categorySearchTerm]);
 
   // Get exchange rates dinamicamente basato sulla valuta selezionata
   const { data: exchangeRate, isLoading: exchangeRateLoading } = trpc.currency.getExchangeRate.useQuery(
@@ -168,7 +182,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
         currency: existingExpense.currency,
         categoryId: existingExpense.categoryId.toString(),
         date: new Date(existingExpense.date).toISOString().split('T')[0],
-        description: (existingExpense.description || '') as string,
+        description: existingExpense.description?.toString() || '',
         conversionRate: existingExpense.conversionRate, // Preserva il tasso storico
       });
     }
@@ -196,6 +210,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     const handleClickOutside = (event: MouseEvent) => {
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
         setIsCategoryDropdownOpen(false);
+        setCategorySearchTerm(''); // Reset search when closing
       }
     };
 
@@ -206,6 +221,15 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, [isCategoryDropdownOpen]);
+
+  // Auto-focus sul campo di ricerca quando il dropdown si apre
+  useEffect(() => {
+    if (isCategoryDropdownOpen && categorySearchRef.current) {
+      setTimeout(() => {
+        categorySearchRef.current?.focus();
+      }, 100);
+    }
   }, [isCategoryDropdownOpen]);
 
   const validateForm = (): boolean => {
@@ -593,29 +617,99 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
 
                 {/* Dropdown List */}
                 {isCategoryDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {categories?.map((category) => {
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-80 overflow-hidden">
+                    {/* Search Input */}
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-600">
+                      <input
+                        ref={categorySearchRef}
+                        type="text"
+                        placeholder="Cerca categoria per nome..."
+                        value={categorySearchTerm}
+                        onChange={(e) => setCategorySearchTerm(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-white"
+                        onKeyDown={(e) => {
+                          // Gestione navigazione con tastiera
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setCategorySearchTerm('');
+                            setIsCategoryDropdownOpen(false);
+                          } else if (e.key === 'Enter' && filteredCategories.length === 1 && filteredCategories[0]) {
+                            // Se c'è solo una categoria che corrisponde alla ricerca, selezionala
+                            e.preventDefault();
+                            handleInputChange('categoryId', filteredCategories[0].id.toString());
+                            setIsCategoryDropdownOpen(false);
+                            setCategorySearchTerm('');
+                          }
+                        }}
+                      />
+                      {categorySearchTerm && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {filteredCategories.length} categoria{filteredCategories.length !== 1 ? 'e' : ''} trovata{filteredCategories.length !== 1 ? 'e' : ''}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Categories List */}
+                    <div className="max-h-48 overflow-y-auto">
+                      {filteredCategories.length > 0 ? (
+                        filteredCategories.map((category) => {
                       const IconComponent = getIconComponent(category.icon);
                       return (
                         <button
                           key={category.id}
                           type="button"
-                          onClick={() => {
-                            handleInputChange('categoryId', category.id.toString());
-                            setIsCategoryDropdownOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
-                        >
-                          <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-white">{category.name}</div>
-                            {category.description && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{category.description}</div>
-                            )}
+                            onClick={() => {
+                              handleInputChange('categoryId', category.id.toString());
+                              setIsCategoryDropdownOpen(false);
+                              setCategorySearchTerm(''); // Reset search after selection
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                          >
+                            <IconComponent className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                            <div>
+                              <div className="font-medium text-gray-900 dark:text-white">
+                                {/* Evidenzia il testo di ricerca */}
+                                {categorySearchTerm ? (
+                                  <span dangerouslySetInnerHTML={{
+                                    __html: category.name.replace(
+                                      new RegExp(`(${categorySearchTerm})`, 'gi'),
+                                      '<mark class="bg-yellow-200 dark:bg-yellow-600">$1</mark>'
+                                    )
+                                  }} />
+                                ) : (
+                                  category.name
+                                )}
+                              </div>
+                              {category.description && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {/* Evidenzia il testo di ricerca nella descrizione */}
+                                  {categorySearchTerm ? (
+                                    <span dangerouslySetInnerHTML={{
+                                      __html: category.description.replace(
+                                        new RegExp(`(${categorySearchTerm})`, 'gi'),
+                                        '<mark class="bg-yellow-200 dark:bg-yellow-600">$1</mark>'
+                                      )
+                                    }} />
+                                  ) : (
+                                    category.description
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                        <div className="text-sm">Nessuna categoria trovata</div>
+                        {categorySearchTerm && (
+                          <div className="text-xs mt-1">
+                            Prova a cercare con termini diversi
                           </div>
-                        </button>
-                      );
-                    })}
+                        )}
+                      </div>
+                    )}
+                    </div>
                   </div>
                 )}
               </div>
