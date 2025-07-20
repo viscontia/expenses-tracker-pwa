@@ -682,13 +682,18 @@ function ExpensesPage() {
         keyField="id"
         emptyMessage="Nessuna spesa trovata"
         groupBy={(row) => row.category?.name || 'Senza categoria'}
-        groupHeader={(categoryName) => (
+        groupHeader={(categoryName, expense, groupTotal, groupCount) => (
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
               📂 {categoryName}
             </div>
             <div className="text-xs text-blue-600 dark:text-blue-300">
-              {filteredExpenses.filter(expense => expense.category?.name === categoryName).length} spese
+              {groupCount} spese
+              {groupTotal !== undefined && (
+                <span className="ml-2 text-green-700 dark:text-green-300">
+                  • {formatCurrency(groupTotal, summaryCurrency)}
+                </span>
+              )}
             </div>
           </div>
         )}

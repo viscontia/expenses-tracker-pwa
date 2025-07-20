@@ -14,7 +14,7 @@ interface ResponsiveTableProps {
   emptyMessage?: string;
   className?: string;
   groupBy?: string | ((row: any) => any); // Campo per il grouping o funzione
-  groupHeader?: (value: any, row: any) => ReactNode; // Renderer per l'header del gruppo
+  groupHeader?: (value: any, row: any, groupTotal?: number, groupCount?: number) => ReactNode; // Renderer per l'header del gruppo
   calculateGroupTotal?: (groupValue: any, groupData: any[]) => number; // Funzione per calcolare il totale del gruppo
   formatCurrency?: (amount: number, currency: string) => string; // Funzione per formattare la valuta
   selectedCurrency?: string; // Valuta selezionata per il formato
@@ -62,6 +62,29 @@ export function ResponsiveTable({
     let currentGroup: any = null;
     let currentGroupData: any[] = [];
 
+    // Prima passata: raggruppa tutti i dati per calcolare i totali
+    const groupTotals = new Map<string, number>();
+    const groupCounts = new Map<string, number>();
+    
+    data.forEach((row) => {
+      const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
+      const key = groupValue || 'Senza categoria';
+      
+      if (!groupCounts.has(key)) {
+        groupCounts.set(key, 0);
+        groupTotals.set(key, 0);
+      }
+      
+      groupCounts.set(key, groupCounts.get(key)! + 1);
+      
+      if (calculateGroupTotal) {
+        // Per il calcolo del totale, creiamo un array temporaneo con solo questa riga
+        const tempData = [row];
+        const groupTotal = calculateGroupTotal(groupValue, tempData);
+        groupTotals.set(key, groupTotals.get(key)! + groupTotal);
+      }
+    });
+
     data.forEach((row, index) => {
       const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
@@ -84,13 +107,27 @@ export function ResponsiveTable({
         currentGroup = groupValue;
         currentGroupData = [];
         
-        // Aggiungi header del gruppo
+        // Aggiungi header del gruppo con totale
+        const groupKey = groupValue || 'Senza categoria';
+        const groupTotal = groupTotals.get(groupKey) || 0;
+        const groupCount = groupCounts.get(groupKey) || 0;
+        
         rows.push(
           <tr key={`group-${groupValue}-${index}`} className="bg-blue-50 dark:bg-blue-900/20">
             <td colSpan={columns.length} className="px-6 py-3">
-              {groupHeader ? groupHeader(groupValue, row) : (
-                <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-                  {groupValue}
+              {groupHeader ? groupHeader(groupValue, row, groupTotal, groupCount) : (
+                <div className="flex justify-between items-center">
+                  <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                    {groupValue}
+                  </div>
+                  <div className="text-xs text-blue-600 dark:text-blue-300">
+                    {groupCount} spese
+                    {formatCurrency && selectedCurrency && (
+                      <span className="ml-2 text-green-700 dark:text-green-300">
+                        • {formatCurrency(groupTotal, selectedCurrency)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </td>
@@ -156,6 +193,29 @@ export function ResponsiveTable({
     let currentGroup: any = null;
     let currentGroupData: any[] = [];
 
+    // Prima passata: raggruppa tutti i dati per calcolare i totali (mobile)
+    const groupTotals = new Map<string, number>();
+    const groupCounts = new Map<string, number>();
+    
+    data.forEach((row) => {
+      const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
+      const key = groupValue || 'Senza categoria';
+      
+      if (!groupCounts.has(key)) {
+        groupCounts.set(key, 0);
+        groupTotals.set(key, 0);
+      }
+      
+      groupCounts.set(key, groupCounts.get(key)! + 1);
+      
+      if (calculateGroupTotal) {
+        // Per il calcolo del totale, creiamo un array temporaneo con solo questa riga
+        const tempData = [row];
+        const groupTotal = calculateGroupTotal(groupValue, tempData);
+        groupTotals.set(key, groupTotals.get(key)! + groupTotal);
+      }
+    });
+
     data.forEach((row, index) => {
       const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
@@ -176,12 +236,26 @@ export function ResponsiveTable({
         currentGroup = groupValue;
         currentGroupData = [];
         
-        // Aggiungi header del gruppo mobile
+        // Aggiungi header del gruppo mobile con totale
+        const groupKey = groupValue || 'Senza categoria';
+        const groupTotal = groupTotals.get(groupKey) || 0;
+        const groupCount = groupCounts.get(groupKey) || 0;
+        
         rows.push(
           <div key={`mobile-group-${groupValue}-${index}`} className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-blue-200 dark:border-blue-700">
-            {groupHeader ? groupHeader(groupValue, row) : (
-              <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-                {groupValue}
+            {groupHeader ? groupHeader(groupValue, row, groupTotal, groupCount) : (
+              <div className="flex justify-between items-center">
+                <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                  {groupValue}
+                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-300">
+                  {groupCount} spese
+                  {formatCurrency && selectedCurrency && (
+                    <span className="ml-2 text-green-700 dark:text-green-300">
+                      • {formatCurrency(groupTotal, selectedCurrency)}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
