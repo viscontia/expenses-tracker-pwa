@@ -114,11 +114,47 @@ function Dashboard() {
   
   const expenses = expensesData?.expenses || [];
   
-  // ✅ CALCOLI KPI FRONTEND - Stessa logica dell'elenco spese
+  // ✅ CALCOLI KPI FRONTEND - Basati sul periodo selezionato
   const kpis = useMemo(() => {
     if (!expenses.length) return null;
-    return calculateKPIsForPeriod(expenses as ExpenseForCalculation[], selectedCurrency);
-  }, [expenses, selectedCurrency]);
+    
+    // Calcola KPI basati sul periodo selezionato invece che sempre sul mese corrente
+    const now = new Date();
+    let periodStart: Date;
+    let periodEnd: Date;
+    
+    switch (timeFilter) {
+      case 'previous':
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
+      case 'yoy':
+        periodStart = new Date(now.getFullYear() - 1, 0, 1);
+        periodEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+        break;
+      case 'current':
+      default:
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        break;
+    }
+    
+    // Filtra spese per il periodo selezionato
+    const periodExpenses = expenses.filter(expense => {
+      const expenseDate = new Date(expense.date);
+      return expenseDate >= periodStart && expenseDate <= periodEnd;
+    });
+    
+    // Calcola totale per il periodo
+    const totalForPeriod = calculateTotalInCurrency(periodExpenses as ExpenseForCalculation[], selectedCurrency);
+    
+    return {
+      totalCurrentMonth: totalForPeriod,
+      totalPreviousMonth: 0, // Non utilizzato per filtri personalizzati
+      transactionCount: periodExpenses.length,
+      averageAmount: periodExpenses.length > 0 ? totalForPeriod / periodExpenses.length : 0
+    };
+  }, [expenses, selectedCurrency, timeFilter]);
 
   // 📊 CALCOLO TREND MENSILE - Spostato fuori dal useMemo principale
   const monthlyTrend = useMemo(() => {
@@ -147,23 +183,16 @@ function Dashboard() {
     return monthlyTotals;
   }, [expenses, selectedCurrency]);
 
-  // ✅ CALCOLI GRAFICI FRONTEND - Logica semplice e funzionante
+  // ✅ CALCOLI GRAFICI FRONTEND - Basati sul periodo selezionato
   const chartData = useMemo(() => {
     if (!expenses.length || !categories) return null;
     
-    const now = new Date();
-    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    
-    // Filtra spese mese corrente
-    const currentMonthExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= startOfCurrentMonth && expenseDate <= endOfCurrentMonth;
-    });
+    // Usa le spese già filtrate dal dateRange (che rispetta il timeFilter)
+    // Non serve filtrare di nuovo, le spese sono già corrette per il periodo selezionato
     
     // Raggruppa per categoria
     const categoryTotals = new Map<number, number>();
-    currentMonthExpenses.forEach(expense => {
+    expenses.forEach(expense => {
       const currentTotal = categoryTotals.get(expense.categoryId) || 0;
       // Usa stessa logica calculateTotalInCurrency per singola spesa
       const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
@@ -200,13 +229,28 @@ function Dashboard() {
     return isFinite(change) ? change : 0;
   }, [kpis?.totalCurrentMonth, kpis?.totalPreviousMonth]);
 
-  // Calcolo media giornaliera - USANDO KPI CALCOLATI
+  // Calcolo media giornaliera - Basata sul periodo selezionato
   const dailyAverage = useMemo(() => {
     if (!kpis?.totalCurrentMonth) return 0;
+    
     const now = new Date();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return kpis.totalCurrentMonth / daysInMonth;
-  }, [kpis?.totalCurrentMonth]);
+    let daysInPeriod: number;
+    
+    switch (timeFilter) {
+      case 'previous':
+        daysInPeriod = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+        break;
+      case 'yoy':
+        daysInPeriod = 365; // Anno completo
+        break;
+      case 'current':
+      default:
+        daysInPeriod = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        break;
+    }
+    
+    return kpis.totalCurrentMonth / daysInPeriod;
+  }, [kpis?.totalCurrentMonth, timeFilter]);
 
   // 🏷️ ETICHETTE DINAMICHE - Ultimi 6 mesi reali
   const monthLabels = useMemo(() => {
