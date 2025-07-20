@@ -291,22 +291,75 @@ function ExpensesPage() {
         doc.text(`Totale: ${formatCurrency(totalAmount, summaryCurrency)} (${filteredExpenses.length} spese)`, 14, yPosition);
         yPosition += 15;
         
-        // Tabella
-        const tableData = filteredExpenses.map(expense => [
-          new Date(expense.date).toLocaleDateString('it-IT'),
-          expense.description || '',
-          `${formatCurrency(calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency), summaryCurrency)}`,
-          expense.category?.name || '',
-          expense.conversionRate ? `${expense.conversionRate}` : '1'
-        ]);
+        // Raggruppa le spese per categoria
+        const groupedExpenses = new Map<string, any[]>();
+        filteredExpenses.forEach(expense => {
+          const categoryName = expense.category?.name || 'Senza categoria';
+          if (!groupedExpenses.has(categoryName)) {
+            groupedExpenses.set(categoryName, []);
+          }
+          groupedExpenses.get(categoryName)!.push(expense);
+        });
+
+        // Crea dati tabella con rotture di controllo
+        const tableData: any[] = [];
         
-        // Aggiungi riga del totale alla fine della tabella
+        groupedExpenses.forEach((categoryExpenses, categoryName) => {
+          // Calcola totale per categoria
+          const categoryTotal = calculateTotalInCurrency(categoryExpenses as ExpenseForCalculation[], summaryCurrency);
+          
+          // Aggiungi header categoria
+          tableData.push([
+            {
+              content: `📂 ${categoryName} (${categoryExpenses.length} spese • ${formatCurrency(categoryTotal, summaryCurrency)})`,
+              colSpan: 5,
+              styles: {
+                fillColor: [59, 130, 246], // Blu
+                textColor: 255, // Bianco
+                fontStyle: 'bold',
+                fontSize: 10
+              }
+            }
+          ]);
+          
+          // Aggiungi spese della categoria
+          categoryExpenses.forEach(expense => {
+            tableData.push([
+              new Date(expense.date).toLocaleDateString('it-IT'),
+              expense.description || '',
+              `${formatCurrency(calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency), summaryCurrency)}`,
+              expense.category?.name || '',
+              expense.conversionRate ? `${expense.conversionRate}` : '1'
+            ]);
+          });
+          
+          // Aggiungi totale categoria
+          tableData.push([
+            {
+              content: `Totale ${categoryName}: ${formatCurrency(categoryTotal, summaryCurrency)}`,
+              colSpan: 5,
+              styles: {
+                fillColor: [34, 197, 94], // Verde
+                textColor: 255, // Bianco
+                fontStyle: 'bold',
+                fontSize: 9
+              }
+            }
+          ]);
+        });
+        
+        // Aggiungi riga del totale generale alla fine
         tableData.push([
-          '',
-          'TOTALE',
-          `${formatCurrency(totalAmount, summaryCurrency)}`,
-          '',
-          ''
+          {
+            content: `TOTALE GENERALE: ${formatCurrency(totalAmount, summaryCurrency)}`,
+            colSpan: 5,
+            styles: {
+              fillColor: [239, 68, 68], // Rosso
+              textColor: 255, // Bianco
+              fontStyle: 'bold',
+              fontSize: 10
+            }
+          }
         ]);
       
               autoTable(doc, {
@@ -325,11 +378,21 @@ function ExpensesPage() {
             fillColor: [248, 250, 252]
           },
           didParseCell: function(data) {
-            // Evidenzia la riga del totale
-            if (data.row.index === tableData.length - 1) {
-              data.cell.styles.fillColor = [34, 197, 94]; // Verde
-              data.cell.styles.textColor = 255; // Bianco
-              data.cell.styles.fontStyle = 'bold';
+            // Gestisci righe con colSpan (header categoria e totali)
+            if (data.cell.colSpan && data.cell.colSpan > 1) {
+              // Applica stili personalizzati per header categoria e totali
+              if (data.cell.styles.fillColor) {
+                data.cell.styles.fillColor = data.cell.styles.fillColor;
+              }
+              if (data.cell.styles.textColor) {
+                data.cell.styles.textColor = data.cell.styles.textColor;
+              }
+              if (data.cell.styles.fontStyle) {
+                data.cell.styles.fontStyle = data.cell.styles.fontStyle;
+              }
+              if (data.cell.styles.fontSize) {
+                data.cell.styles.fontSize = data.cell.styles.fontSize;
+              }
             }
           }
         });
