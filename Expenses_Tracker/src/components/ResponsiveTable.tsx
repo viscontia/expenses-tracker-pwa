@@ -13,7 +13,7 @@ interface ResponsiveTableProps {
   keyField: string;
   emptyMessage?: string;
   className?: string;
-  groupBy?: string; // Campo per il grouping
+  groupBy?: string | ((row: any) => any); // Campo per il grouping o funzione
   groupHeader?: (value: any, row: any) => ReactNode; // Renderer per l'header del gruppo
 }
 
@@ -56,7 +56,7 @@ export function ResponsiveTable({
     let currentGroup: any = null;
 
     data.forEach((row, index) => {
-      const groupValue = row[groupBy];
+      const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
       // Se il gruppo cambia, aggiungi un header
       if (currentGroup !== groupValue) {
@@ -118,7 +118,7 @@ export function ResponsiveTable({
     let currentGroup: any = null;
 
     data.forEach((row, index) => {
-      const groupValue = row[groupBy];
+      const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
       // Se il gruppo cambia, aggiungi un header mobile
       if (currentGroup !== groupValue) {

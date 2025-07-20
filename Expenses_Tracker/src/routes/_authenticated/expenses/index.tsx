@@ -668,7 +668,7 @@ function ExpensesPage() {
         data={filteredExpenses}
         keyField="id"
         emptyMessage="Nessuna spesa trovata"
-        groupBy="category.name"
+        groupBy={(row) => row.category?.name || 'Senza categoria'}
         groupHeader={(categoryName) => (
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
