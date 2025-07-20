@@ -143,6 +143,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
   const [categorySearchTerm, setCategorySearchTerm] = useState('');
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const categorySearchRef = useRef<HTMLInputElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   // Funzione per ottenere il componente icona
   const getIconComponent = (iconName: string) => {
@@ -253,6 +254,34 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
       }, 100);
     }
   }, [isCategoryDropdownOpen]);
+
+  // 🎯 Auto-focus sul campo IMPORTO ogni volta che si apre la form
+  useEffect(() => {
+    // Focus sul campo importo quando la form è pronta e visibile
+    const timer = setTimeout(() => {
+      if (amountInputRef.current && !isSubmitting && !isSubmitted) {
+        amountInputRef.current.focus();
+        amountInputRef.current.select(); // Seleziona il testo per facilitare la sovrascrittura
+      }
+    }, 150); // Piccolo delay per assicurarsi che il DOM sia pronto
+
+    return () => clearTimeout(timer);
+  }, [isSubmitting, isSubmitted]); // Ri-esegui quando cambia lo stato di submit
+
+  // 🔄 Focus automatico dopo reset per inserimenti multipli  
+  useEffect(() => {
+    // Quando la form si resetta per un nuovo inserimento (continueInserting),
+    // formData.amount diventa vuoto, quindi riapplicare il focus
+    if (!existingExpense && formData.amount === '' && !isSubmitting && !isSubmitted) {
+      const timer = setTimeout(() => {
+        if (amountInputRef.current) {
+          amountInputRef.current.focus();
+        }
+      }, 200); // Delay leggermente maggiore per il reset
+
+      return () => clearTimeout(timer);
+    }
+  }, [formData.amount, existingExpense, isSubmitting, isSubmitted]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {};
@@ -568,6 +597,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                   Importo *
                 </label>
                 <input
+                  ref={amountInputRef}
                   type="number"
                   step="0.01"
                   value={formData.amount}
