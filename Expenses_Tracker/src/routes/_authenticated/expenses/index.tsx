@@ -668,6 +668,17 @@ function ExpensesPage() {
         data={filteredExpenses}
         keyField="id"
         emptyMessage="Nessuna spesa trovata"
+        groupBy="category.name"
+        groupHeader={(categoryName) => (
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+              📂 {categoryName}
+            </div>
+            <div className="text-xs text-blue-600 dark:text-blue-300">
+              {filteredExpenses.filter(expense => expense.category?.name === categoryName).length} spese
+            </div>
+          </div>
+        )}
       />
 
       {/* Summary */}
