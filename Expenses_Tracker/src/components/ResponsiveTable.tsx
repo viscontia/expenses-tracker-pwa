@@ -15,6 +15,9 @@ interface ResponsiveTableProps {
   className?: string;
   groupBy?: string | ((row: any) => any); // Campo per il grouping o funzione
   groupHeader?: (value: any, row: any) => ReactNode; // Renderer per l'header del gruppo
+  calculateGroupTotal?: (groupValue: any, groupData: any[]) => number; // Funzione per calcolare il totale del gruppo
+  formatCurrency?: (amount: number, currency: string) => string; // Funzione per formattare la valuta
+  selectedCurrency?: string; // Valuta selezionata per il formato
 }
 
 export function ResponsiveTable({
@@ -24,7 +27,10 @@ export function ResponsiveTable({
   emptyMessage = "No data available",
   className = "",
   groupBy,
-  groupHeader
+  groupHeader,
+  calculateGroupTotal,
+  formatCurrency,
+  selectedCurrency
 }: ResponsiveTableProps) {
   if (data.length === 0) {
     return (
@@ -54,13 +60,29 @@ export function ResponsiveTable({
     // Raggruppa i dati per il campo specificato
     const rows: ReactNode[] = [];
     let currentGroup: any = null;
+    let currentGroupData: any[] = [];
 
     data.forEach((row, index) => {
       const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
-      // Se il gruppo cambia, aggiungi un header
+      // Se il gruppo cambia, aggiungi un header con totale del gruppo precedente
       if (currentGroup !== groupValue) {
+        // Aggiungi totale del gruppo precedente se esiste
+        if (currentGroup && currentGroupData.length > 0 && calculateGroupTotal && formatCurrency && selectedCurrency) {
+          const groupTotal = calculateGroupTotal(currentGroup, currentGroupData);
+          rows.push(
+            <tr key={`group-total-${currentGroup}-${index}`} className="bg-green-50 dark:bg-green-900/20">
+              <td colSpan={columns.length} className="px-6 py-2 text-right">
+                <div className="text-sm font-semibold text-green-800 dark:text-green-200">
+                  Totale {currentGroup}: {formatCurrency(groupTotal, selectedCurrency)}
+                </div>
+              </td>
+            </tr>
+          );
+        }
+        
         currentGroup = groupValue;
+        currentGroupData = [];
         
         // Aggiungi header del gruppo
         rows.push(
@@ -76,6 +98,8 @@ export function ResponsiveTable({
         );
       }
 
+      currentGroupData.push(row);
+
       // Aggiungi la riga normale
       rows.push(
         <tr key={row[keyField]} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -90,6 +114,20 @@ export function ResponsiveTable({
         </tr>
       );
     });
+
+    // Aggiungi totale dell'ultimo gruppo
+    if (currentGroup && currentGroupData.length > 0 && calculateGroupTotal && formatCurrency && selectedCurrency) {
+      const groupTotal = calculateGroupTotal(currentGroup, currentGroupData);
+      rows.push(
+        <tr key={`group-total-${currentGroup}-final`} className="bg-green-50 dark:bg-green-900/20">
+          <td colSpan={columns.length} className="px-6 py-2 text-right">
+            <div className="text-sm font-semibold text-green-800 dark:text-green-200">
+              Totale {currentGroup}: {formatCurrency(groupTotal, selectedCurrency)}
+            </div>
+          </td>
+        </tr>
+      );
+    }
 
     return rows;
   };
@@ -116,13 +154,27 @@ export function ResponsiveTable({
     // Raggruppa i dati mobile per il campo specificato
     const rows: ReactNode[] = [];
     let currentGroup: any = null;
+    let currentGroupData: any[] = [];
 
     data.forEach((row, index) => {
       const groupValue = typeof groupBy === 'function' ? groupBy(row) : row[groupBy];
       
-      // Se il gruppo cambia, aggiungi un header mobile
+      // Se il gruppo cambia, aggiungi un header mobile con totale del gruppo precedente
       if (currentGroup !== groupValue) {
+        // Aggiungi totale del gruppo precedente se esiste
+        if (currentGroup && currentGroupData.length > 0 && calculateGroupTotal && formatCurrency && selectedCurrency) {
+          const groupTotal = calculateGroupTotal(currentGroup, currentGroupData);
+          rows.push(
+            <div key={`mobile-group-total-${currentGroup}-${index}`} className="bg-green-50 dark:bg-green-900/20 px-4 py-2 border-b border-green-200 dark:border-green-700">
+              <div className="text-sm font-semibold text-green-800 dark:text-green-200 text-right">
+                Totale {currentGroup}: {formatCurrency(groupTotal, selectedCurrency)}
+              </div>
+            </div>
+          );
+        }
+        
         currentGroup = groupValue;
+        currentGroupData = [];
         
         // Aggiungi header del gruppo mobile
         rows.push(
@@ -135,6 +187,8 @@ export function ResponsiveTable({
           </div>
         );
       }
+
+      currentGroupData.push(row);
 
       // Aggiungi la card normale
       rows.push(
@@ -152,6 +206,18 @@ export function ResponsiveTable({
         </div>
       );
     });
+
+    // Aggiungi totale dell'ultimo gruppo mobile
+    if (currentGroup && currentGroupData.length > 0 && calculateGroupTotal && formatCurrency && selectedCurrency) {
+      const groupTotal = calculateGroupTotal(currentGroup, currentGroupData);
+      rows.push(
+        <div key={`mobile-group-total-${currentGroup}-final`} className="bg-green-50 dark:bg-green-900/20 px-4 py-2 border-b border-green-200 dark:border-green-700">
+          <div className="text-sm font-semibold text-green-800 dark:text-green-200 text-right">
+            Totale {currentGroup}: {formatCurrency(groupTotal, selectedCurrency)}
+          </div>
+        </div>
+      );
+    }
 
     return rows;
   };

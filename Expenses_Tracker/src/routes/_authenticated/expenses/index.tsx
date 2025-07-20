@@ -692,6 +692,11 @@ function ExpensesPage() {
             </div>
           </div>
         )}
+        calculateGroupTotal={(categoryName, groupData) => {
+          return calculateTotalInCurrency(groupData as ExpenseForCalculation[], summaryCurrency);
+        }}
+        formatCurrency={formatCurrency}
+        selectedCurrency={summaryCurrency}
       />
 
       {/* Summary */}
