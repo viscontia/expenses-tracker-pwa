@@ -304,6 +304,30 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
     return Object.keys(newErrors).length === 0;
   };
 
+  // 🎯 Gestione tasto ENTER per submit rapido
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // Submit con ENTER solo se:
+    // 1. È premuto Enter
+    // 2. Non siamo già in submit
+    // 3. Non stiamo digitando nel campo ricerca categorie (che ha la sua logica Enter)
+    if (e.key === 'Enter' && !isSubmitting && !isSubmitted) {
+      const target = e.target as HTMLElement;
+      
+      // Escludi il campo di ricerca categorie (ha già il suo comportamento Enter)
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).placeholder === 'Cerca categoria per nome...') {
+        return; // Lascia che il campo ricerca gestisca Enter
+      }
+      
+      // Escludi textarea se ce ne sono (per consentire newline)
+      if (target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      e.preventDefault();
+      handleSubmit(e as any); // Cast per compatibilità tipo
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -588,7 +612,11 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form 
+            onSubmit={handleSubmit} 
+            onKeyDown={handleFormKeyDown}
+            className="space-y-6"
+          >
             {/* Amount and Currency Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
