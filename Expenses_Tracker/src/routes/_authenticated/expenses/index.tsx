@@ -286,36 +286,53 @@ function ExpensesPage() {
         yPosition += 7;
       }
       
-      // Riepilogo
-      const totalAmount = calculateTotalInCurrency(filteredExpenses, summaryCurrency);
-      doc.text(`Totale: ${formatCurrency(totalAmount, summaryCurrency)} (${filteredExpenses.length} spese)`, 14, yPosition);
-      yPosition += 15;
+              // Riepilogo
+        const totalAmount = calculateTotalInCurrency(filteredExpenses as ExpenseForCalculation[], summaryCurrency);
+        doc.text(`Totale: ${formatCurrency(totalAmount, summaryCurrency)} (${filteredExpenses.length} spese)`, 14, yPosition);
+        yPosition += 15;
+        
+        // Tabella
+        const tableData = filteredExpenses.map(expense => [
+          new Date(expense.date).toLocaleDateString('it-IT'),
+          expense.description || '',
+          `${formatCurrency(calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency), summaryCurrency)}`,
+          expense.category?.name || '',
+          expense.conversionRate ? `${expense.conversionRate}` : '1'
+        ]);
+        
+        // Aggiungi riga del totale alla fine della tabella
+        tableData.push([
+          '',
+          'TOTALE',
+          `${formatCurrency(totalAmount, summaryCurrency)}`,
+          '',
+          ''
+        ]);
       
-      // Tabella
-      const tableData = filteredExpenses.map(expense => [
-        new Date(expense.date).toLocaleDateString('it-IT'),
-        expense.description || '',
-        `${formatCurrency(calculateTotalInCurrency([expense as ExpenseForCalculation], summaryCurrency), summaryCurrency)}`,
-        expense.category?.name || '',
-        expense.conversionRate ? `${expense.conversionRate}` : '1'
-      ]);
-      
-      autoTable(doc, {
-        head: [['Data', 'Descrizione', 'Importo', 'Categoria', 'Tasso']],
-        body: tableData,
-        startY: yPosition,
-        styles: {
-          fontSize: 8,
-          cellPadding: 2
-        },
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: 255
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252]
-        }
-      });
+              autoTable(doc, {
+          head: [['Data', 'Descrizione', 'Importo', 'Categoria', 'Tasso']],
+          body: tableData,
+          startY: yPosition,
+          styles: {
+            fontSize: 8,
+            cellPadding: 2
+          },
+          headStyles: {
+            fillColor: [59, 130, 246],
+            textColor: 255
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252]
+          },
+          didParseCell: function(data) {
+            // Evidenzia la riga del totale
+            if (data.row.index === tableData.length - 1) {
+              data.cell.styles.fillColor = [34, 197, 94]; // Verde
+              data.cell.styles.textColor = 255; // Bianco
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        });
       
       // Genera nome file con timestamp
       const timestamp = new Date().toISOString().slice(0, 10);
