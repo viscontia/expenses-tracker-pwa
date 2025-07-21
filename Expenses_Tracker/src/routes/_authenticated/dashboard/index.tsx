@@ -19,6 +19,7 @@ import { RateIndicator } from '~/components/RateIndicator';
 import { ExchangeRateStatusIndicator } from '~/components/ExchangeRateStatusIndicator';
 import { calculateTotalInCurrency, calculateKPIsForPeriod, ExpenseForCalculation } from '~/utils/currencyCalculations';
 import { formatCurrency, formatNumber } from '~/utils/formatters';
+import { ALL_CURRENCIES, CURRENCY_NAMES } from '~/utils/currencies';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, BarElement);
 
@@ -492,7 +493,11 @@ function Dashboard() {
               onChange={handleCurrencyChange}
               className="bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {/* Rimuovi la mappatura delle valute qui, poiché ora viene gestita globalmente */}
+              {ALL_CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {CURRENCY_NAMES[currency] || currency}
+                </option>
+              ))}
             </select>
           </div>
 
