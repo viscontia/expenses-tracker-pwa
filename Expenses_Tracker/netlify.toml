@@ -1,15 +1,9 @@
 [build]
   command = "NODE_ENV=production pnpm build"
-  publish = "dist"
-  functions = ".netlify/functions"
+  publish = ".output/public"
 
 [build.environment]
   NODE_ENV = "production"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/server"
-  status = 200
 
 [[redirects]]
   from = "/*"

@@ -19,7 +19,7 @@ const env = envSchema.parse(process.env)
 
 export default createApp({
 	server: {
-		preset: 'netlify',
+		preset: 'node-server',
 		experimental: {
 			asyncContext: true,
 		},
