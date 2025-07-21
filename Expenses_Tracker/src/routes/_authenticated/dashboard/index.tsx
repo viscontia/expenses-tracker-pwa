@@ -165,64 +165,14 @@ function Dashboard() {
     };
   }, [expenses, selectedCurrency]);
 
-  // 📊 CALCOLO TREND MENSILE - Spostato fuori dal useMemo principale
-  const monthlyTrend = useMemo(() => {
-    if (!expenses || expenses.length === 0) return [0, 0, 0, 0, 0, 0];
-    
-    const now = new Date();
-    const monthlyTotals: number[] = [];
-    
-    // Calcola totali per gli ultimi 6 mesi (da 5 mesi fa a questo mese)
-    for (let i = 5; i >= 0; i--) {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      
-      // Filtra spese per questo mese specifico
-      const monthExpenses = expenses.filter(expense => {
-        const expenseDate = new Date(expense.date);
-        return expenseDate.getFullYear() === year && expenseDate.getMonth() === month;
-      });
-      
-      // Calcola totale per questo mese nella valuta selezionata
-      const monthTotal = calculateTotalInCurrency(monthExpenses, selectedCurrency);
-      monthlyTotals.push(monthTotal);
-    }
-    
-    return monthlyTotals;
-  }, [expenses, selectedCurrency]);
+  // Usa la query ottimizzata per i dati dashboard
+  const { data: chartData } = trpc.dashboard.getChartData.useQuery({
+    targetCurrency: selectedCurrency || 'EUR',
+  });
 
-  // ✅ CALCOLI GRAFICI FRONTEND - Basati sul periodo selezionato
-  const chartData = useMemo(() => {
-    if (!expenses.length || !categories) return null;
-    
-    // Usa le spese già filtrate dal dateRange (che rispetta il timeFilter)
-    // Non serve filtrare di nuovo, le spese sono già corrette per il periodo selezionato
-    
-    // Raggruppa per categoria
-    const categoryTotals = new Map<number, number>();
-    expenses.forEach(expense => {
-      const currentTotal = categoryTotals.get(expense.categoryId) || 0;
-      // Usa stessa logica calculateTotalInCurrency per singola spesa
-      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
-      categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
-    });
-    
-    // Ordina categorie per totale
-    const categoryExpenses = Array.from(categoryTotals.entries())
-      .sort(([, a], [, b]) => b - a)
-      // ✅ NESSUN LIMITE - Mostra tutte le categorie
-      .map(([categoryId, amount]) => {
-        const category = categories.find(c => c.id === categoryId);
-        return {
-          id: categoryId,
-          name: category?.name || 'Unknown',
-          amount,
-        };
-      });
-    
-    return { categoryExpenses, monthlyTrend };
-  }, [expenses, categories, selectedCurrency, monthlyTrend]);
+  // Trend mensile e labels dai dati backend
+  const monthlyTrend = chartData?.monthlyTrend?.map(item => item.amount) || [];
+  const monthLabels = chartData?.monthlyTrend?.map(item => item.month) || [];
 
   // Categoria top - dal chartData calcolato
   const topCategory = useMemo(() => {
@@ -270,20 +220,6 @@ function Dashboard() {
     
     return kpis.totalCurrentMonth / daysInPeriod;
   }, [kpis?.totalCurrentMonth, timeFilter]);
-
-  // 🏷️ ETICHETTE DINAMICHE - Ultimi 6 mesi reali
-  const monthLabels = useMemo(() => {
-    const now = new Date();
-    const labels: string[] = [];
-    const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-    
-    for (let i = 5; i >= 0; i--) {
-      const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      labels.push(monthNames[targetDate.getMonth()]);
-    }
-    
-    return labels;
-  }, []);
 
   // previousMonthData ora usa previousExpenses
   const previousMonthData = useMemo(() => {
@@ -471,7 +407,7 @@ function Dashboard() {
     datasets: [
       {
         label: `Spese (${selectedCurrency ?? 'EUR'})`,
-        data: chartData?.monthlyTrend || [0, 0, 0, 0, 0, 0],
+        data: monthlyTrend,
         borderColor: '#8B5CF6',
         backgroundColor: 'rgba(139, 92, 246, 0.1)',
         borderWidth: 2,
