@@ -119,13 +119,32 @@ function Dashboard() {
   
   const expenses = expensesData?.expenses || [];
   
+  // Calcola il range del mese precedente
+  const previousMonthRange = useMemo(() => {
+    const now = new Date();
+    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    return {
+      start: startOfPreviousMonth.toISOString(),
+      end: endOfPreviousMonth.toISOString(),
+    };
+  }, []);
+
+  // Query per le spese del mese precedente
+  const { data: previousExpensesData } = trpc.expenses.getExpenses.useQuery({
+    categoryIds: selectedCategory ? [selectedCategory] : undefined,
+    startDate: previousMonthRange.start,
+    endDate: previousMonthRange.end,
+  });
+  const previousExpenses = previousExpensesData?.expenses || [];
+
   // 🔍 DEBUG: Log per verificare le spese caricate (solo per test)
   if (process.env.NODE_ENV === 'development') {
     console.log('🔍 Dashboard Debug - timeFilter:', timeFilter);
     console.log('🔍 Dashboard Debug - dateRange start:', dateRange.start);
     console.log('🔍 Dashboard Debug - dateRange end:', dateRange.end);
     console.log('🔍 Dashboard Debug - expensesCount:', expenses.length);
-    console.log('🔍 Dashboard Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency));
+    console.log('🔍 Dashboard Debug - totalCalculated:', calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency || 'EUR'));
   }
   
   // ✅ CALCOLI KPI FRONTEND - Usa spese già filtrate dal backend
@@ -136,7 +155,7 @@ function Dashboard() {
     // Non serve filtrare di nuovo, le spese sono già corrette per il periodo selezionato
     
     // Calcola totale per il periodo
-    const totalForPeriod = calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency);
+    const totalForPeriod = calculateTotalInCurrency(expenses as ExpenseForCalculation[], selectedCurrency || 'EUR');
     
     return {
       totalCurrentMonth: totalForPeriod,
@@ -266,26 +285,15 @@ function Dashboard() {
     return labels;
   }, []);
 
-  // 📊 DATI MESE PRECEDENTE per confronto
+  // previousMonthData ora usa previousExpenses
   const previousMonthData = useMemo(() => {
-    if (!expenses.length || !categories) return null;
-    
-    const now = new Date();
-    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    
-    const prevMonthExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= startOfPrevMonth && expenseDate <= endOfPrevMonth;
-    });
-    
+    if (!previousExpenses.length || !categories) return [];
     const categoryTotals = new Map<number, number>();
-    prevMonthExpenses.forEach(expense => {
+    previousExpenses.forEach(expense => {
       const currentTotal = categoryTotals.get(expense.categoryId) || 0;
-      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency);
+      const convertedAmount = calculateTotalInCurrency([expense as ExpenseForCalculation], selectedCurrency || 'EUR');
       categoryTotals.set(expense.categoryId, currentTotal + convertedAmount);
     });
-    
     return Array.from(categoryTotals.entries()).map(([categoryId, amount]) => {
       const category = categories.find(c => c.id === categoryId);
       return {
@@ -294,7 +302,26 @@ function Dashboard() {
         amount,
       };
     });
-  }, [expenses, categories, selectedCurrency]);
+  }, [previousExpenses, categories, selectedCurrency]);
+
+  // === AGGIUNGI QUESTA PARTE SUBITO DOPO previousMonthData ===
+  const mergedCategories = useMemo(() => {
+    if (!chartData?.categoryExpenses || !previousMonthData) return [];
+    const allCategoryIds = new Set([
+      ...chartData.categoryExpenses.map(c => c.id),
+      ...previousMonthData.map(c => c.id),
+    ]);
+    return Array.from(allCategoryIds).map(id => {
+      const current = chartData.categoryExpenses.find(c => c.id === id);
+      const previous = previousMonthData.find(c => c.id === id);
+      return {
+        id,
+        name: current?.name || previous?.name || 'Unknown',
+        currentAmount: current?.amount || 0,
+        previousAmount: previous?.amount || 0,
+      };
+    });
+  }, [chartData?.categoryExpenses, previousMonthData]);
 
   // Handlers per UI
   const handleCurrencyChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -713,11 +740,11 @@ function Dashboard() {
             <Bar
               id="horizontal-bar-chart"
               data={{
-                labels: chartData?.categoryExpenses?.map(cat => cat.name) || [],
+                labels: (chartData?.categoryExpenses || []).map(cat => cat.name),
                 datasets: [{
                   label: `Importo (${selectedCurrency ?? 'EUR'})`,
-                  data: chartData?.categoryExpenses?.map(cat => cat.amount) || [],
-                  backgroundColor: chartData?.categoryExpenses?.map((_, index) => [
+                  data: (chartData?.categoryExpenses || []).map(cat => cat.amount),
+                  backgroundColor: (chartData?.categoryExpenses || []).map((_, index) => [
                     '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
                     '#EF4444', '#EC4899', '#84CC16', '#6366F1',
                     '#F97316', '#14B8A6'
@@ -769,9 +796,9 @@ function Dashboard() {
                   },
                 },
                 onClick: (event, elements) => {
-                  if (elements.length > 0 && chartData?.categoryExpenses) {
+                  if (elements.length > 0 && (chartData?.categoryExpenses || []).length > 0) {
                     const index = elements[0].index;
-                    const categoryId = chartData.categoryExpenses[index]?.id;
+                    const categoryId = (chartData?.categoryExpenses || [])[index]?.id;
                     if (categoryId) handleCategoryClick(categoryId);
                   }
                 }
@@ -796,21 +823,18 @@ function Dashboard() {
             <Bar
               id="grouped-bar-chart"
               data={{
-                labels: chartData?.categoryExpenses?.map(cat => cat.name) || [],
+                labels: mergedCategories.map(cat => cat.name),
                 datasets: [
                   {
                     label: 'Mese Corrente',
-                    data: chartData?.categoryExpenses?.map(cat => cat.amount) || [],
+                    data: mergedCategories.map(cat => cat.currentAmount),
                     backgroundColor: '#8B5CF6',
                     borderColor: '#A855F7',
                     borderWidth: 1,
                   },
                   {
                     label: 'Mese Precedente',
-                    data: chartData?.categoryExpenses?.map(cat => {
-                      const prevData = previousMonthData?.find(p => p.id === cat.id);
-                      return prevData?.amount || 0;
-                    }) || [],
+                    data: mergedCategories.map(cat => cat.previousAmount),
                     backgroundColor: '#06B6D4',
                     borderColor: '#0891B2',
                     borderWidth: 1,
