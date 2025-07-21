@@ -272,14 +272,18 @@ function Dashboard() {
     setSelectedCategory(categoryId === selectedCategory ? null : categoryId);
   }, [selectedCategory]);
 
-  const handleExportChart = useCallback((chartId: string) => {
+  const handleExportChart = useCallback(async (chartId: string) => {
     const canvas = document.getElementById(chartId) as HTMLCanvasElement;
     if (canvas) {
-      const url = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `${chartId}-export.png`;
-      link.href = url;
-      link.click();
+      // Lazy load html2canvas solo quando serve
+      const html2canvas = (await import('html2canvas')).default;
+      html2canvas(canvas).then((canvasExport) => {
+        const url = canvasExport.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = `${chartId}-export.png`;
+        link.href = url;
+        link.click();
+      });
     }
   }, []);
 
