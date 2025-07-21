@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /node_modules/
+Disallow: /scripts/
+Disallow: /prisma/
+Disallow: /__tests__/
+
+Allow: /
+
+Sitemap: /sitemap.xml 
