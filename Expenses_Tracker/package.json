@@ -5,7 +5,7 @@
     "dev": "kill-port 3000 && concurrently \"pnpm:tsr-watch\" \"pnpm:vinxi-dev\"",
     "tsr-watch": "tsr generate -w",
     "vinxi-dev": "vinxi dev --port 3000",
-    "build": "mkdir -p src/generated/tanstack-router && pnpm tsr generate && pnpm vinxi build --preset node-server",
+    "build": "./build.sh",
     "start": "vinxi start",
     "test": "vitest",
     "test:run": "vitest run",
