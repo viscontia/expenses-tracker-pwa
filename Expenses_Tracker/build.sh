@@ -1,13 +1,20 @@
 #!/bin/bash
 set -e
 
-echo "Creating directories..."
-mkdir -p src/generated/tanstack-router
+echo "Current directory: $(pwd)"
+echo "Listing current directory:"
+ls -la
+
+echo "Creating directories with absolute path..."
+mkdir -p "$(pwd)/src/generated/tanstack-router"
+
+echo "Verifying directory creation:"
+ls -la "$(pwd)/src/generated/tanstack-router/"
 
 echo "Generating route tree..."
-pnpm tsr generate
+cd "$(pwd)" && pnpm tsr generate
 
 echo "Building with Vinxi..."
-pnpm vinxi build --preset node-server
+cd "$(pwd)" && pnpm vinxi build --preset node-server
 
 echo "Build completed successfully!" 
