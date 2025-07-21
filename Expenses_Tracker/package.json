@@ -5,7 +5,7 @@
     "dev": "kill-port 3000 && concurrently \"pnpm:tsr-watch\" \"pnpm:vinxi-dev\"",
     "tsr-watch": "tsr generate -w",
     "vinxi-dev": "vinxi dev --port 3000",
-    "build": "vinxi build --preset node-server",
+    "build": "tsr generate && vinxi build --preset node-server",
     "start": "vinxi start",
     "test": "vitest",
     "test:run": "vitest run",
