@@ -151,9 +151,6 @@ function ExpensesPage() {
   // Fetch categories for filter
   const { data: categories } = trpc.categories.getAll.useQuery();
   
-  // Fetch available currencies for display
-  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
-
   // Delete expense mutation
   const deleteExpenseMutation = trpc.expenses.deleteExpense.useMutation({
     onSuccess: () => {
@@ -594,7 +591,7 @@ function ExpensesPage() {
             onChange={(e) => setSummaryCurrency(e.target.value)}
             className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            {availableCurrencies?.map((currency) => (
+            {CURRENCIES.map((currency) => (
               <option key={currency.code} value={currency.code}>
                 {currency.symbol} {currency.code}
               </option>

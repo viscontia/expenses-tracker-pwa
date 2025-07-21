@@ -48,7 +48,6 @@ function Dashboard() {
   }, [defaultCurrency]);
   
   // ✅ QUERY DATI - Solo quello che serve
-  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
   const { data: lastExchangeUpdate } = trpc.currency.getLastExchangeRateUpdate.useQuery();
   const { data: categories } = trpc.categories.getAll.useQuery();
   
@@ -345,7 +344,7 @@ function Dashboard() {
   }
 
   // Se non ci sono dati, mostra messaggio
-  if (!kpis && !chartData && !availableCurrencies) {
+  if (!kpis && !chartData && !lastExchangeUpdate) {
     return (
       <div className="space-y-6">
         <div className="bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800 p-6">
@@ -493,11 +492,7 @@ function Dashboard() {
               onChange={handleCurrencyChange}
               className="bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {availableCurrencies?.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.symbol} {currency.code}
-                </option>
-              ))}
+              {/* Rimuovi la mappatura delle valute qui, poiché ora viene gestita globalmente */}
             </select>
           </div>
 

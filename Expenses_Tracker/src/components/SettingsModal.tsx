@@ -40,9 +40,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   );
   const [selectedCurrencyToAdd, setSelectedCurrencyToAdd] = useState<string>('');
 
-  // Get available currencies
-  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery();
-
   // Update preferences mutation
   const updatePreferencesMutation = trpc.auth.updatePreferences.useMutation({
     onSuccess: () => {
@@ -116,6 +113,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const removeCurrencyFromOrder = (currencyCode: string) => {
     setCurrencyOrder(currencyOrder.filter(code => code !== currencyCode));
   };
+
+  // Hook di sola lettura per le valute disponibili (usa la cache)
+  const { data: availableCurrencies } = trpc.currency.getAvailableCurrencies.useQuery(undefined, { staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false });
 
   // Get available currencies not in the order list - cached with useMemo
   const filteredAvailableCurrencies = useMemo(() => {
