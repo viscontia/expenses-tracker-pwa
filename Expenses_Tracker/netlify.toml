@@ -1,6 +1,7 @@
 [build]
   command = "NODE_ENV=production pnpm build"
   publish = ".output/public"
+  functions = ".netlify/functions"
 
 [build.environment]
   NODE_ENV = "production"
