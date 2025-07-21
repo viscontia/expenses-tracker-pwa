@@ -19,7 +19,7 @@ const env = envSchema.parse(process.env)
 
 export default createApp({
 	server: {
-		preset: 'node-server', // change to 'netlify' or 'bun' or anyof the supported presets for nitro (nitro.unjs.io)
+		preset: 'netlify',
 		experimental: {
 			asyncContext: true,
 		},

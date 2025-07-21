@@ -1,0 +1,1 @@
+const i=(s,r)=>s.reduce((e,o)=>{const{amount:n,currency:u,conversionRate:c}=o;if(u===r)return e+n;if(u==="EUR"&&r!=="EUR")return e+n/c;if(u!=="EUR"&&r==="EUR")return e+n/c;{const R=n/c;return e+R}},0);export{i as c};
