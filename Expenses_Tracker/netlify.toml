@@ -1,0 +1,10 @@
+[build]
+  command = "NODE_ENV=production pnpm build"
+  publish = ".output/public"
+
+[build.environment]
+  NODE_ENV = "production"
+
+[[edge_functions]]
+  path = "/*"
+  function = "server" 
