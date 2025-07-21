@@ -101,4 +101,4 @@ Questo progetto è sotto licenza MIT. Vedi il file `LICENSE` per maggiori dettag
 ---
 
 **Versione**: 1.0.0  
-**Ultimo aggiornamento**: Dicembre 2024 
+**Ultimo aggiornamento**: Dicembre 2024 (deploy test) 
