@@ -37,45 +37,36 @@ self.addEventListener('fetch', (event) => {
       event.request.url.includes('.tsx') ||
       event.request.url.includes('.ts') ||
       event.request.url.includes('.jsx') ||
-      event.request.url.includes('.js') && event.request.url.includes('localhost')) {
+      (event.request.url.includes('.js') && event.request.url.includes('localhost'))) {
     return; // Non intercettare questi requests
   }
 
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Return cached version or fetch from network
         if (response) {
           return response;
         }
-        
-        // Clone the request because it's a stream
         const fetchRequest = event.request.clone();
-        
         return fetch(fetchRequest).then((response) => {
-          // Check if we received a valid response
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
-          
-          // Only cache GET requests for static resources (not development files)
           if (event.request.method === 'GET' && 
               !event.request.url.includes('/src/') &&
               !event.request.url.includes('.tsx') &&
               !event.request.url.includes('.ts')) {
             const responseToCache = response.clone();
-            
             caches.open(CACHE_NAME)
               .then((cache) => {
                 cache.put(event.request, responseToCache);
               });
           }
-          
           return response;
         }).catch(() => {
-          // Return offline page or cached content
+          // Return offline page custom
           if (event.request.destination === 'document') {
-            return caches.match('/');
+            return caches.match('/offlineExpenseTracker.html');
           }
         });
       })
