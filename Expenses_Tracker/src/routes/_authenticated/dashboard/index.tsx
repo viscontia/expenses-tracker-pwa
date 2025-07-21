@@ -14,7 +14,7 @@ import {
 } from "chart.js";
 import { trpc } from "~/trpc/react";
 import { useAuthStore } from '~/stores/auth';
-import { Globe, BarChart2, TrendingUp, Clock, RefreshCw, Download, Filter, Calendar } from 'lucide-react';
+import { Globe, BarChart2, TrendingUp, Clock, RefreshCw, Download, Filter, Calendar, Loader2 } from 'lucide-react';
 import { RateIndicator } from '~/components/RateIndicator';
 import { ExchangeRateStatusIndicator } from '~/components/ExchangeRateStatusIndicator';
 import { calculateTotalInCurrency, calculateKPIsForPeriod, ExpenseForCalculation } from '~/utils/currencyCalculations';
@@ -596,62 +596,66 @@ function Dashboard() {
               <Download className="w-5 h-5" />
             </button>
           </div>
-          <div className="h-80">
-            <Doughnut 
-              id="donut-chart"
-              data={{
-                labels: chartData?.categoryExpenses?.map(cat => cat.name) || [],
-                datasets: [{
-                  data: chartData?.categoryExpenses?.map(cat => cat.amount) || [],
-                  backgroundColor: [
-                    '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
-                    '#EF4444', '#EC4899', '#84CC16', '#6366F1',
-                    '#F97316', '#14B8A6'
-                  ],
-                  borderWidth: 2,
-                  borderColor: '#1F2937',
-                  hoverBorderWidth: 3,
-                  hoverBorderColor: '#FFFFFF',
-                }]
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '60%', // Questo rende il grafico un donut invece di pie
-                plugins: {
-                  legend: {
-                    position: 'bottom' as const,
-                    labels: {
-                      color: '#9CA3AF',
-                      padding: 15,
-                      usePointStyle: true,
+          <div className="h-80 flex items-center justify-center">
+            {expensesLoading || !chartData ? (
+              <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+            ) : (
+              <Doughnut 
+                id="donut-chart"
+                data={{
+                  labels: chartData?.categoryExpenses?.map(cat => cat.name) || [],
+                  datasets: [{
+                    data: chartData?.categoryExpenses?.map(cat => cat.amount) || [],
+                    backgroundColor: [
+                      '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
+                      '#EF4444', '#EC4899', '#84CC16', '#6366F1',
+                      '#F97316', '#14B8A6'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#1F2937',
+                    hoverBorderWidth: 3,
+                    hoverBorderColor: '#FFFFFF',
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  cutout: '60%', // Questo rende il grafico un donut invece di pie
+                  plugins: {
+                    legend: {
+                      position: 'bottom' as const,
+                      labels: {
+                        color: '#9CA3AF',
+                        padding: 15,
+                        usePointStyle: true,
+                      },
                     },
-                  },
-                  tooltip: {
-                    backgroundColor: '#1F2937',
-                    titleColor: '#F9FAFB',
-                    bodyColor: '#F9FAFB',
-                    borderColor: '#374151',
-                    borderWidth: 1,
-                    callbacks: {
-                      label: function(context: any) {
-                        const value = context.parsed;
-                        const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                        const percentage = formatNumber((value / total) * 100, 1);
-                        return `${context.label}: ${formatCurrency(value, selectedCurrency || 'EUR')} (${percentage}%)`;
+                    tooltip: {
+                      backgroundColor: '#1F2937',
+                      titleColor: '#F9FAFB',
+                      bodyColor: '#F9FAFB',
+                      borderColor: '#374151',
+                      borderWidth: 1,
+                      callbacks: {
+                        label: function(context: any) {
+                          const value = context.parsed;
+                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                          const percentage = formatNumber((value / total) * 100, 1);
+                          return `${context.label}: ${formatCurrency(value, selectedCurrency || 'EUR')} (${percentage}%)`;
+                        }
                       }
                     }
+                  },
+                  onClick: (event, elements) => {
+                    if (elements.length > 0 && chartData?.categoryExpenses) {
+                      const index = elements[0].index;
+                      const categoryId = chartData.categoryExpenses[index]?.id;
+                      if (categoryId) handleCategoryClick(categoryId);
+                    }
                   }
-                },
-                onClick: (event, elements) => {
-                  if (elements.length > 0 && chartData?.categoryExpenses) {
-                    const index = elements[0].index;
-                    const categoryId = chartData.categoryExpenses[index]?.id;
-                    if (categoryId) handleCategoryClick(categoryId);
-                  }
-                }
-              }} 
-            />
+                }} 
+              />
+            )}
           </div>
         </div>
 
@@ -667,74 +671,78 @@ function Dashboard() {
               <Download className="w-5 h-5" />
             </button>
           </div>
-          <div className="h-80">
-            <Bar
-              id="horizontal-bar-chart"
-              data={{
-                labels: (chartData?.categoryExpenses || []).map(cat => cat.name),
-                datasets: [{
-                  label: `Importo (${selectedCurrency ?? 'EUR'})`,
-                  data: (chartData?.categoryExpenses || []).map(cat => cat.amount),
-                  backgroundColor: (chartData?.categoryExpenses || []).map((_, index) => [
-                    '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
-                    '#EF4444', '#EC4899', '#84CC16', '#6366F1',
-                    '#F97316', '#14B8A6'
-                  ][index % 10]) || [],
-                  borderWidth: 1,
-                  borderColor: '#374151',
-                }]
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y' as const, // Questo rende il grafico orizzontale
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                  tooltip: {
-                    backgroundColor: '#1F2937',
-                    titleColor: '#F9FAFB',
-                    bodyColor: '#F9FAFB',
-                    borderColor: '#374151',
+          <div className="h-80 flex items-center justify-center">
+            {expensesLoading || !chartData ? (
+              <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+            ) : (
+              <Bar
+                id="horizontal-bar-chart"
+                data={{
+                  labels: (chartData?.categoryExpenses || []).map(cat => cat.name),
+                  datasets: [{
+                    label: `Importo (${selectedCurrency ?? 'EUR'})`,
+                    data: (chartData?.categoryExpenses || []).map(cat => cat.amount),
+                    backgroundColor: (chartData?.categoryExpenses || []).map((_, index) => [
+                      '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B',
+                      '#EF4444', '#EC4899', '#84CC16', '#6366F1',
+                      '#F97316', '#14B8A6'
+                    ][index % 10]) || [],
                     borderWidth: 1,
-                    callbacks: {
-                      label: function(context: any) {
-                        return `${context.dataset.label}: ${formatCurrency(context.parsed.x, selectedCurrency || 'EUR')}`;
+                    borderColor: '#374151',
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y' as const, // Questo rende il grafico orizzontale
+                  plugins: {
+                    legend: {
+                      display: false,
+                    },
+                    tooltip: {
+                      backgroundColor: '#1F2937',
+                      titleColor: '#F9FAFB',
+                      bodyColor: '#F9FAFB',
+                      borderColor: '#374151',
+                      borderWidth: 1,
+                      callbacks: {
+                        label: function(context: any) {
+                          return `${context.dataset.label}: ${formatCurrency(context.parsed.x, selectedCurrency || 'EUR')}`;
+                        }
                       }
                     }
-                  }
-                },
-                scales: {
-                  x: {
-                    ticks: {
-                      color: '#9CA3AF',
-                      callback: function(value: any) {
-                        return formatCurrency(value, selectedCurrency || 'EUR');
-                      }
+                  },
+                  scales: {
+                    x: {
+                      ticks: {
+                        color: '#9CA3AF',
+                        callback: function(value: any) {
+                          return formatCurrency(value, selectedCurrency || 'EUR');
+                        }
+                      },
+                      grid: {
+                        color: '#374151',
+                      },
                     },
-                    grid: {
-                      color: '#374151',
+                    y: {
+                      ticks: {
+                        color: '#9CA3AF',
+                      },
+                      grid: {
+                        color: '#374151',
+                      },
                     },
                   },
-                  y: {
-                    ticks: {
-                      color: '#9CA3AF',
-                    },
-                    grid: {
-                      color: '#374151',
-                    },
-                  },
-                },
-                onClick: (event, elements) => {
-                  if (elements.length > 0 && (chartData?.categoryExpenses || []).length > 0) {
-                    const index = elements[0].index;
-                    const categoryId = (chartData?.categoryExpenses || [])[index]?.id;
-                    if (categoryId) handleCategoryClick(categoryId);
+                  onClick: (event, elements) => {
+                    if (elements.length > 0 && (chartData?.categoryExpenses || []).length > 0) {
+                      const index = elements[0].index;
+                      const categoryId = (chartData?.categoryExpenses || [])[index]?.id;
+                      if (categoryId) handleCategoryClick(categoryId);
+                    }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            )}
           </div>
         </div>
 
@@ -750,80 +758,84 @@ function Dashboard() {
               <Download className="w-5 h-5" />
             </button>
           </div>
-          <div className="h-80">
-            <Bar
-              id="grouped-bar-chart"
-              data={{
-                labels: mergedCategories.map(cat => cat.name),
-                datasets: [
-                  {
-                    label: 'Mese Corrente',
-                    data: mergedCategories.map(cat => cat.currentAmount),
-                    backgroundColor: '#8B5CF6',
-                    borderColor: '#A855F7',
-                    borderWidth: 1,
-                  },
-                  {
-                    label: 'Mese Precedente',
-                    data: mergedCategories.map(cat => cat.previousAmount),
-                    backgroundColor: '#06B6D4',
-                    borderColor: '#0891B2',
-                    borderWidth: 1,
-                  }
-                ]
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    labels: {
-                      color: '#9CA3AF',
+          <div className="h-80 flex items-center justify-center">
+            {expensesLoading || !chartData ? (
+              <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+            ) : (
+              <Bar
+                id="grouped-bar-chart"
+                data={{
+                  labels: mergedCategories.map(cat => cat.name),
+                  datasets: [
+                    {
+                      label: 'Mese Corrente',
+                      data: mergedCategories.map(cat => cat.currentAmount),
+                      backgroundColor: '#8B5CF6',
+                      borderColor: '#A855F7',
+                      borderWidth: 1,
                     },
-                  },
-                  tooltip: {
-                    backgroundColor: '#1F2937',
-                    titleColor: '#F9FAFB',
-                    bodyColor: '#F9FAFB',
-                    borderColor: '#374151',
-                    borderWidth: 1,
-                    callbacks: {
-                      label: function(context: any) {
-                        return `${context.dataset.label}: ${formatCurrency(context.parsed.y, selectedCurrency || 'EUR')}`;
+                    {
+                      label: 'Mese Precedente',
+                      data: mergedCategories.map(cat => cat.previousAmount),
+                      backgroundColor: '#06B6D4',
+                      borderColor: '#0891B2',
+                      borderWidth: 1,
+                    }
+                  ]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      labels: {
+                        color: '#9CA3AF',
+                      },
+                    },
+                    tooltip: {
+                      backgroundColor: '#1F2937',
+                      titleColor: '#F9FAFB',
+                      bodyColor: '#F9FAFB',
+                      borderColor: '#374151',
+                      borderWidth: 1,
+                      callbacks: {
+                        label: function(context: any) {
+                          return `${context.dataset.label}: ${formatCurrency(context.parsed.y, selectedCurrency || 'EUR')}`;
+                        }
                       }
                     }
-                  }
-                },
-                scales: {
-                  x: {
-                    ticks: {
-                      color: '#9CA3AF',
+                  },
+                  scales: {
+                    x: {
+                      ticks: {
+                        color: '#9CA3AF',
+                      },
+                      grid: {
+                        color: '#374151',
+                      },
                     },
-                    grid: {
-                      color: '#374151',
+                    y: {
+                      ticks: {
+                        color: '#9CA3AF',
+                        callback: function(value: any) {
+                          return formatCurrency(value, selectedCurrency || 'EUR');
+                        }
+                      },
+                      grid: {
+                        color: '#374151',
+                      },
                     },
                   },
-                  y: {
-                    ticks: {
-                      color: '#9CA3AF',
-                      callback: function(value: any) {
-                        return formatCurrency(value, selectedCurrency || 'EUR');
-                      }
-                    },
-                    grid: {
-                      color: '#374151',
-                    },
-                  },
-                },
-                onClick: (event, elements) => {
-                  if (elements.length > 0 && chartData?.categoryExpenses) {
-                    const index = elements[0].index;
-                    const categoryId = chartData.categoryExpenses[index]?.id;
-                    if (categoryId) handleCategoryClick(categoryId);
+                  onClick: (event, elements) => {
+                    if (elements.length > 0 && chartData?.categoryExpenses) {
+                      const index = elements[0].index;
+                      const categoryId = chartData.categoryExpenses[index]?.id;
+                      if (categoryId) handleCategoryClick(categoryId);
+                    }
                   }
-                }
-              }}
-            />
+                }}
+              />
+            )}
           </div>
         </div>
 
@@ -839,29 +851,33 @@ function Dashboard() {
               <Download className="w-5 h-5" />
             </button>
           </div>
-          <div className="h-80">
-            <Line 
-              id="line-chart"
-              data={lineChartData} 
-              options={{
-                ...lineChartOptions,
-                plugins: {
-                  ...lineChartOptions.plugins,
-                  tooltip: {
-                    backgroundColor: '#1F2937',
-                    titleColor: '#F9FAFB',
-                    bodyColor: '#F9FAFB',
-                    borderColor: '#374151',
-                    borderWidth: 1,
-                    callbacks: {
-                      label: function(context: any) {
-                        return `${context.dataset.label}: ${formatCurrency(context.parsed.y, selectedCurrency || 'EUR')}`;
+          <div className="h-80 flex items-center justify-center">
+            {expensesLoading || !chartData ? (
+              <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
+            ) : (
+              <Line 
+                id="line-chart"
+                data={lineChartData} 
+                options={{
+                  ...lineChartOptions,
+                  plugins: {
+                    ...lineChartOptions.plugins,
+                    tooltip: {
+                      backgroundColor: '#1F2937',
+                      titleColor: '#F9FAFB',
+                      bodyColor: '#F9FAFB',
+                      borderColor: '#374151',
+                      borderWidth: 1,
+                      callbacks: {
+                        label: function(context: any) {
+                          return `${context.dataset.label}: ${formatCurrency(context.parsed.y, selectedCurrency || 'EUR')}`;
+                        }
                       }
                     }
                   }
-                }
-              }} 
-            />
+                }} 
+              />
+            )}
           </div>
         </div>
       </div>
