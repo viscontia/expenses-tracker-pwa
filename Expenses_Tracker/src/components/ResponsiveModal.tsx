@@ -88,6 +88,7 @@ export function ResponsiveModal({
                       type="button"
                       className="p-2 -mr-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                       onClick={onClose}
+                      aria-label="Chiudi modale"
                     >
                       <XIcon className="h-5 w-5" />
                     </button>

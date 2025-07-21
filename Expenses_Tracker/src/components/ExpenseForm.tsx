@@ -524,6 +524,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
           <button
             onClick={() => navigate({ to: '/expenses' })}
             className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            aria-label="Torna alla lista spese"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -559,11 +560,12 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                   checked={continueInserting}
                   onChange={(e) => setContinueInserting(e.target.checked)}
                   className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                  id="continue-inserting"
                 />
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-green-900 dark:text-green-100">
+                  <label htmlFor="continue-inserting" className="text-sm font-medium text-green-900 dark:text-green-100">
                     Continua a rimanere in Inserimento Spese
-                  </span>
+                  </label>
                   <p className="text-xs text-green-700 dark:text-green-300 mt-1">
                     Se attivato, dopo ogni registrazione la form si resetta per inserire una nuova spesa
                   </p>
@@ -615,9 +617,11 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                     errors.amount ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                   }`}
                   placeholder="0.00"
+                  id="amount-input"
+                  aria-describedby={errors.amount ? "amount-error" : ""}
                 />
                 {errors.amount && (
-                  <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
+                  <p className="text-red-500 text-sm mt-1" id="amount-error">{errors.amount}</p>
                 )}
               </div>
 
@@ -629,6 +633,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                   value={formData.currency}
                   onChange={(e) => handleInputChange('currency', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  id="currency-select"
                 >
                   {CURRENCIES.map((currency) => (
                     <option key={currency.code} value={currency.code}>
@@ -676,6 +681,9 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-left flex items-center justify-between ${
                     errors.categoryId ? 'border-red-500' : 'border-gray-300'
                   }`}
+                  aria-haspopup="listbox"
+                  aria-expanded={isCategoryDropdownOpen}
+                  aria-describedby={errors.categoryId ? "category-error" : ""}
                 >
                   <div className="flex items-center gap-2">
                     {selectedCategory ? (
@@ -710,6 +718,8 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                         value={categorySearchTerm}
                         onChange={(e) => setCategorySearchTerm(e.target.value)}
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-500 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-white"
+                        id="category-search"
+                        aria-label="Cerca categoria"
                         onKeyDown={(e) => {
                           // Gestione navigazione con tastiera
                           if (e.key === 'Escape') {
@@ -798,7 +808,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
               </div>
               
               {errors.categoryId && (
-                <p className="text-red-500 text-sm mt-1">{errors.categoryId}</p>
+                <p className="text-red-500 text-sm mt-1" id="category-error">{errors.categoryId}</p>
               )}
             </div>
 
@@ -815,9 +825,11 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${
                   errors.date ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                 }`}
+                id="date-input"
+                aria-describedby={errors.date ? "date-error" : ""}
               />
               {errors.date && (
-                <p className="text-red-500 text-sm mt-1">{errors.date}</p>
+                <p className="text-red-500 text-sm mt-1" id="date-error">{errors.date}</p>
               )}
             </div>
 
@@ -834,8 +846,10 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
                 placeholder="Aggiungi una descrizione..."
                 maxLength={200}
+                id="description-textarea"
+                aria-describedby="description-counter"
               />
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1" id="description-counter">
                 {formData.description.length}/200 caratteri
               </div>
             </div>
@@ -846,6 +860,7 @@ export function ExpenseForm({ mode, expenseId }: ExpenseFormProps) {
                 type="button"
                 onClick={() => navigate({ to: '/expenses' })}
                 className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-6 py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors flex items-center justify-center"
+                aria-label="Annulla e torna alla lista spese"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Annulla

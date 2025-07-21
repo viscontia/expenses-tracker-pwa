@@ -190,6 +190,7 @@ export function ExchangeRateNotifications({ className = '' }: ExchangeRateNotifi
                 <button
                   onClick={() => removeNotification(notification.id)}
                   className={`rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                  aria-label="Chiudi notifica"
                 >
                   <X className="h-4 w-4" />
                 </button>
